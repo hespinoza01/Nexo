@@ -450,7 +450,7 @@ class SettingsWindow: NSWindow {
 
     private func addSection(_ definition: SettingsSectionDefinition) {
         // Wrap the tab's view construction in an `indexed { ... }` scope so that every factory
-        // call inside (`LabelAndControl.makeDropdown`, `TableGroupView.makeText`, `ProBadgeView`,
+        // call inside (`LabelAndControl.makeDropdown`, `TableGroupView.makeText`,
         // etc.) pushes its searchable strings and highlight targets into a per-section `Builder`.
         // The harvested results become the section's `searchableStrings` / `highlightTargets`
         // directly — no second-pass walk over the view tree. The section title is also produced

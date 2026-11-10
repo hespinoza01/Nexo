@@ -7,7 +7,7 @@ final class SearchDiscoveryPanel: NSPanel {
     )
     static let dismissLabel = NSLocalizedString("Don't show discovery tips again", comment: "")
     let titleLabel = NSTextField(labelWithString: "")
-    private let rabbit = ProMascotView()
+    private let rabbit = MascotView()
     private let root = NSView()
     let hintLabel = NSTextField(labelWithString: "")
     let dismissButton = SearchDiscoveryCloseButton()
@@ -207,7 +207,7 @@ final class SearchDiscoveryCloseButton: NSButton {
     }
 }
 
-final class ProMascotView: NSImageView {
+final class MascotView: NSImageView {
     private static let artwork = NSImage(named: "pro-rabbit")
 
     init() {
@@ -230,7 +230,7 @@ final class MascotMessageView: NSStackView {
     init(title: String, message: String, emphasizeMessage: Bool = false) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        let rabbit = ProMascotView()
+        let rabbit = MascotView()
         rabbit.wantsLayer = true
         let shadow = NSShadow()
         shadow.shadowColor = NSColor.black.withAlphaComponent(0.28)

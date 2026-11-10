@@ -20,7 +20,6 @@ enum OnboardingPopover {
     static func showForQa(completion: Bool) {
         guard Menubar.statusItem != nil else { return }
         close()
-        announcesTrial = true
         if completion {
             stage = .done
             presentCompletion()
@@ -31,7 +30,6 @@ enum OnboardingPopover {
     #endif
     private static var popover: AnchoredPopover?
     private static var stage = Stage.waitingForShortcut
-    private static var announcesTrial = false
     private static var keyMonitors = [Any]()
     private static var pendingDone: DispatchWorkItem?
     private static weak var holdKey: KeycapView?
@@ -40,13 +38,12 @@ enum OnboardingPopover {
 
     /// Returns false before the menubar exists, so the caller can fall back. A hidden or unplaced icon is not a
     /// reason to: the popover then shows under the menu bar (`StatusItemAnchor`).
-    static func show(announcesTrial: Bool) -> Bool {
+    static func show() -> Bool {
         guard Menubar.statusItem != nil else {
             Logger.debug { "no menubar yet" }
             return false
         }
         close()
-        Self.announcesTrial = announcesTrial
         if UserDefaults.standard.bool(forKey: "onboardingShortcutUsed") {
             stage = .done
             presentCompletion()

@@ -6,10 +6,7 @@ import Foundation
 /// caret, refresh, edit menu, `App.cycleSelection`). No globals, no AppKit, no async — so every
 /// interaction is unit-testable. Behavior mirrors the original branch order exactly.
 ///
-/// Pro gating note: `ProFeature.searchInSwitcher.attemptUse()` has side effects (it can consume the
-/// free pass and surface the upgrade UI), so the caller evaluates it at the real attempt moment and
-/// passes the resulting `Bool` in — the kernel never calls it. `toggle` is gate-free because the
-/// original `toggleSearchModeFromShortcut` delegated gating to `enableSearchEditing` / `disableSearchMode`.
+/// `canSearch` stays an input so callers can decide whether search is allowed; Nexo always allows it.
 
 enum SearchMode {
     case off
@@ -58,7 +55,7 @@ enum SearchModeResolver {
         mode == .editing ? .disable : .enterEditing
     }
 
-    /// Gate FIRST (mirrors `attemptUse()` on entry), then the already-editing short-circuit, else enter.
+    /// Gate FIRST, then the already-editing short-circuit, else enter.
     static func enableEditing(mode: SearchMode, canSearch: Bool) -> SearchModeDecision {
         if !canSearch { return .proGateBlocked }
         if mode == .editing { return .placeCaretOnly }

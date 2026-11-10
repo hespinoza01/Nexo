@@ -2,7 +2,6 @@ import Cocoa
 import UniformTypeIdentifiers
 
 class GeneralTab {
-    static var policyLock = false
 
     static func initTab() -> NSView {
         let language = TableGroupView.Row(leftTitle: NSLocalizedString("Language", comment: ""),

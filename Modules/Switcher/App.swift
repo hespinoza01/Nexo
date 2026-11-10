@@ -183,7 +183,7 @@ class App: NSApplication {
     /// shortcut was used. Otherwise Settings opens directly the very first time.
     private static func endFirstLaunchWithPopoverOrSettings() {
         guard !Preferences.settingsWindowShownOnFirstLaunch,
-              OnboardingPopover.show(announcesTrial: false) else {
+              OnboardingPopover.show() else {
             showSettingsWindowOnFirstLaunchIfNeeded()
             return
         }
