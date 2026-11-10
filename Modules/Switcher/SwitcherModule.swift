@@ -14,18 +14,26 @@ final class SwitcherModule: NexoModule {
 
     func start() {
         isRunning = true
+        App.isSwitcherEnabled = true
         guard Self.launched else {
             Self.launched = true
             App.startSwitcher()
             return
         }
+        guard App.didContinueAppLaunch else { return }
         KeyboardEvents.toggleGlobalShortcuts(false)
+        ControlsTab.toggleNativeCommandTabIfNeeded()
     }
 
+    /// `App.isSwitcherEnabled` is what makes this durable: the switcher re-evaluates its shortcuts on
+    /// every app/window activation and would otherwise re-register them.
     func stop() {
         isRunning = false
+        App.isSwitcherEnabled = false
         App.hideUi()
         KeyboardEvents.toggleGlobalShortcuts(true)
+        // Give ⌘Tab back to macOS while the switcher is off.
+        if App.didContinueAppLaunch { setNativeCommandTabEnabled(true) }
     }
 
     func menuItems() -> [NSMenuItem] {
@@ -34,8 +42,10 @@ final class SwitcherModule: NexoModule {
 
     func settingsView() -> NSView {
         let info = NSTextField(wrappingLabelWithString:
-            "Shortcuts, appearance, filters and exceptions for the window switcher live in their own window.")
+            isRunning ? "Shortcuts, appearance, filters and exceptions for the window switcher live in their own window."
+                : "Enable the module to configure the window switcher.")
         let button = NSButton(title: "Open Switcher Settings…", target: self, action: #selector(openSwitcherSettings))
+        button.isEnabled = isRunning
         let stack = NSStackView(views: [info, button])
         stack.orientation = .vertical
         stack.alignment = .leading

@@ -170,12 +170,12 @@ class Preferences {
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: defaultValues)
-        #if DEBUG
+        #if ALTTAB_QA
         pinToDefaultsForQa()
         #endif
     }
 
-    #if DEBUG
+    #if ALTTAB_QA
     static var qaPristine: Bool { CommandLine.arguments.contains("--qa-pristine-prefs") }
 
     /// `--qa-pristine-prefs`: every preference reads as its default unless the launch arguments say otherwise,

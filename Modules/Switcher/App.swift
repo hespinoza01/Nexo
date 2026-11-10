@@ -130,7 +130,9 @@ class App: NSApplication {
     }
 
     @objc static func showSettingsWindow() {
-        guard Menubar.statusItem != nil else {
+        // The settings UI reads state built by `continueAppLaunchAfterPermissionsAreGranted` (shortcut
+        // controls, TilesPanel); before that, remember the request and honour it once launch completes.
+        guard didContinueAppLaunch else {
             pendingShowSettingsWindow = true
             return
         }
@@ -389,10 +391,14 @@ class App: NSApplication {
         #endif
     }
 
+    /// Set by `SwitcherModule`; false while the module is disabled in Nexo.
+    static var isSwitcherEnabled = true
+
     static func checkIfShortcutsShouldBeDisabled(_ activeWindow: Window?, _ activeApp: Application?) {
         let app = activeWindow?.application ?? activeApp!
         let isFullscreen = attendedWindowIsFullscreen(app, activeWindow)
-        let shortcutsShouldBeDisabled = ExceptionMatcher.disablesShortcuts(
+        // A disabled Nexo module keeps its shortcuts off, whatever the per-app exceptions say.
+        let shortcutsShouldBeDisabled = !isSwitcherEnabled || ExceptionMatcher.disablesShortcuts(
             app.state,
             isFullscreen: isFullscreen,
             exceptions: Preferences.exceptions)
@@ -412,7 +418,7 @@ class App: NSApplication {
             })
     }
 
-    private static var didContinueAppLaunch = false
+    private(set) static var didContinueAppLaunch = false
 
     /// Exactly once, whatever asks. `SystemPermissions` polls every 500ms while the permissions window is
     /// up and hops its "granted" verdict to main, where `preStartupPermissionsPassed` is set, so a
@@ -508,8 +514,6 @@ extension App: NSApplicationDelegate {
         // discovery drains re-entrantly during the modal and builds a Window while the model is half-built.
         #if DEBUG
         UserDefaults.standard.set(true, forKey: "NSConstraintBasedLayoutVisualizeMutuallyExclusiveConstraints")
-        #else
-        MoveToApplicationsFolder.promptIfNeeded()
         #endif
         StapledTicket.parkInBackground()
         // Starts the enabled modules; the window switcher module calls `App.startSwitcher()`.
@@ -533,8 +537,9 @@ extension App: NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         NexoCore.terminate()
-        // symbolic hotkeys state persist after the app is quit; we restore this shortcut before quitting
-        setNativeCommandTabEnabled(true)
+        // symbolic hotkeys state persist after the app is quit; we restore this shortcut before quitting.
+        // Only the switcher ever changes them, so leave them alone if it never launched.
+        if App.didContinueAppLaunch { setNativeCommandTabEnabled(true) }
         // usage counters are appended in memory and written back on a debounce; land the pending ones
         UsageStats.flushNow()
     }
