@@ -41,6 +41,7 @@ enum NexoCore {
         registry.register(ClipboardModule())
         registry.register(PortsModule())
         registry.register(QuitProtectionModule())
+        registry.register(AudioMixerModule())
         registry.register(MenuBarModule())
     }
 }
