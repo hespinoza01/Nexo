@@ -54,7 +54,7 @@ class App: NSApplication {
         // we use -n to open a new instance, to avoid calling applicationShouldHandleReopen
         // we use Bundle.main.bundlePath in case of multiple AltTab versions on the machine
         printStackTrace()
-        var arguments = ["-n", Bundle.main.bundlePath]
+        let arguments = ["-n", Bundle.main.bundlePath]
         Process.launchedProcess(launchPath: "/usr/bin/open", arguments: arguments)
         App.shared.terminate(nil)
     }
@@ -482,7 +482,12 @@ class App: NSApplication {
         CliEvents.observe()
         PreferencesEvents.initialize()
         endFirstLaunchWithPopoverOrSettings()
-        if pendingShowSettingsWindow {
+        if !isSwitcherEnabled {
+            // The module was turned off while waiting for permissions: undo what launch just registered.
+            KeyboardEvents.toggleGlobalShortcuts(true)
+            setNativeCommandTabEnabled(true)
+        }
+        if pendingShowSettingsWindow && isSwitcherEnabled {
             pendingShowSettingsWindow = false
             showSettingsWindow()
         }

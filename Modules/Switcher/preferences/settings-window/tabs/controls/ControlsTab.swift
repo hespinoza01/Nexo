@@ -725,6 +725,8 @@ class ControlsTab {
     /// shortcut registry and applies the resolver's verdict via the symbolic-hotkey API. See
     /// `NativeHotkeyResolverSpecs.md` for the kernel's invariants and #5653's root cause.
     static func toggleNativeCommandTabIfNeeded() {
+        // While the Nexo module is off, ⌘Tab belongs to macOS (see `SwitcherModule.stop`).
+        guard App.isSwitcherEnabled else { return }
         let snapshots = shortcuts.values.map { ShortcutSnapshot(modifiers: $0.shortcut.carbonModifierFlags, keyCode: $0.shortcut.carbonKeyCode) }
         let holdShortcutModifiers: [UInt32] = (0..<Preferences.holdShortcut.count).compactMap { i in
             shortcuts[Preferences.indexToName("holdShortcut", i)]?.shortcut.carbonModifierFlags

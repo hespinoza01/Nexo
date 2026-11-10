@@ -92,6 +92,9 @@ class KeyboardEvents {
 
     static func addGlobalShortcut(_ controlId: String, _ shortcut: Shortcut) {
         addGlobalHandlerIfNeeded(shortcut)
+        // Disabled shortcuts (per-app exception, or the Nexo module turned off) are registered later by
+        // `toggleGlobalShortcuts(false)`, which walks every global shortcut.
+        guard !globalShortcutsAreDisabled && App.isSwitcherEnabled else { return }
         registerHotKeyIfNeeded(controlId, shortcut)
         ModifierReleaseLog.setSwitchingChords(switchingChords())
     }

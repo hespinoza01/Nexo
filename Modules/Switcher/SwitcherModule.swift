@@ -23,6 +23,10 @@ final class SwitcherModule: NexoModule {
         guard App.didContinueAppLaunch else { return }
         KeyboardEvents.toggleGlobalShortcuts(false)
         ControlsTab.toggleNativeCommandTabIfNeeded()
+        // Re-apply the per-app exceptions for whatever is frontmost right now.
+        if let pid = Applications.frontmostPid, let app = Applications.findOrCreate(pid) {
+            App.checkIfShortcutsShouldBeDisabled(app.focusedWindow, app)
+        }
     }
 
     /// `App.isSwitcherEnabled` is what makes this durable: the switcher re-evaluates its shortcuts on
@@ -32,6 +36,7 @@ final class SwitcherModule: NexoModule {
         App.isSwitcherEnabled = false
         App.hideUi()
         KeyboardEvents.toggleGlobalShortcuts(true)
+        SettingsWindow.shared?.close()
         // Give ⌘Tab back to macOS while the switcher is off.
         if App.didContinueAppLaunch { setNativeCommandTabEnabled(true) }
     }
