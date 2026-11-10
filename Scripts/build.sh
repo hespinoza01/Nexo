@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
 # Generates the Xcode project and builds Nexo (Debug by default).
-# Usage: Scripts/build.sh [Debug|Release] [--run]
+# Usage: Scripts/build.sh [Debug|Release] [--run]  (arguments in any order)
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
-config="${1:-Debug}"
+config="Debug"
+run=false
+for arg in "$@"; do
+  case "$arg" in
+    --run) run=true ;;
+    Debug|Release) config="$arg" ;;
+    *) echo "unknown argument: $arg" >&2; exit 2 ;;
+  esac
+done
 cd "$root"
 
 xcodegen generate --quiet
@@ -28,7 +36,8 @@ grep -E "error:|BUILD (SUCCEEDED|FAILED)|^/.*/Nexo/(App|Core|Modules)/.*warning:
 app="build/DerivedData/Build/Products/$config/Nexo.app"
 echo "App: $root/$app"
 
-if [[ "${2:-}" == "--run" ]]; then
+if $run; then
   pkill -x Nexo 2>/dev/null || true
+  while pgrep -x Nexo >/dev/null; do sleep 0.1; done
   open "$app"
 fi

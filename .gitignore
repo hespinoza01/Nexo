@@ -8,9 +8,13 @@ xcuserdata/
 .swiftpm/
 # signing material
 *.p12
+*.pfx
 *.key
+*.pem
 *.crt
-*.conf
+*.cer
+*.keychain*
+.env*
 Scripts/.signing/
 # scratch
 _debug.*

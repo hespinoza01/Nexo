@@ -8,6 +8,7 @@ Licencia GPL-3.0 (incorpora AltTab). Créditos en `NOTICE.md`. Solo uso personal
 - `Scripts/build.sh [Debug|Release] [--run]`: regenera `Nexo.xcodeproj` con XcodeGen y compila. El log completo queda en `build/last-build.log`.
 - `Scripts/test.sh`: tests unitarios (target `NexoTests`, se agrega en el sub-plan 10/14).
 - **No** se edita `Nexo.xcodeproj` (gitignored): todo va en `project.yml`.
+- Login item (`SMAppService.mainApp`) registra la ruta del bundle actual: actívalo solo desde la copia instalada en `/Applications`, no desde `build/`.
 - Firma: identidad estable "Nexo Local Signing" (`Scripts/make-signing-cert.sh`). No cambiar el bundle id ni la identidad, porque TCC perdería los permisos de Accessibility y Screen Recording.
 
 ## Arquitectura

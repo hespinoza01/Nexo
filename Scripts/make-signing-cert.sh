@@ -13,13 +13,24 @@ if security find-identity -v -p codesigning | grep -q "\"$name\""; then
   exit 0
 fi
 
+# Imported earlier but never trusted (e.g. the trust prompt was cancelled): re-trust instead of
+# creating a duplicate identity that would make codesign ambiguous.
+if security find-certificate -c "$name" >/dev/null 2>&1; then
+  [[ -f "$dir/nexo.crt" ]] || { echo "'$name' exists in the keychain but is untrusted and $dir/nexo.crt is missing. Delete it in Keychain Access and re-run." >&2; exit 1; }
+  security add-trusted-cert -r trustRoot -p codeSign "$dir/nexo.crt"
+  security find-identity -v -p codesigning | grep "\"$name\""
+  exit 0
+fi
+
 command -v bw >/dev/null || { echo "Bitwarden CLI (bw) is required to generate the p12 password." >&2; exit 1; }
-password="$(bw generate -ulns --length 32)"
+export NEXO_P12_PW
+NEXO_P12_PW="$(bw generate -ulns --length 32)"
 
 # macOS Keychain only imports PKCS12 with legacy algorithms; system LibreSSL emits those by default,
 # Homebrew OpenSSL 3/4 does not.
 ossl=/usr/bin/openssl
 
+umask 077
 mkdir -p "$dir"
 chmod 700 "$dir"
 trap 'rm -f "$dir"/nexo.key "$dir"/nexo.p12 "$dir"/nexo.conf' EXIT
@@ -42,9 +53,10 @@ EOL
   -extensions extensions -sha256 -out "$dir/nexo.crt"
 
 "$ossl" pkcs12 -export -inkey "$dir/nexo.key" -in "$dir/nexo.crt" -out "$dir/nexo.p12" \
-  -passout "pass:$password"
+  -passout env:NEXO_P12_PW
 
-security import "$dir/nexo.p12" -P "$password" -T /usr/bin/codesign
+# `security import` only takes the passphrase via argv; the p12 is short-lived and deleted by the trap.
+security import "$dir/nexo.p12" -P "$NEXO_P12_PW" -T /usr/bin/codesign
 echo "macOS will ask for your login password to trust the certificate for code signing."
 security add-trusted-cert -r trustRoot -p codeSign "$dir/nexo.crt"
 

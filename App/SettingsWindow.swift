@@ -8,6 +8,8 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
     private let sidebar = NSTableView()
     private let content = NSView()
     private var entries: [(id: String, title: String, icon: String)] = []
+    private var currentId = SettingsWindowController.generalId
+    private var activeObserver: NSObjectProtocol?
 
     init(registry: ModuleRegistry) {
         self.registry = registry
@@ -21,6 +23,12 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
         super.init(window: window)
         buildLayout()
         reloadEntries()
+        // Permissions are granted in System Settings; rebuild the page when the user comes back.
+        activeObserver = NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification,
+            object: nil, queue: .main) { [weak self] _ in
+            guard let self, self.window?.isVisible == true else { return }
+            self.showPage(self.currentId)
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("programmatic only") }
@@ -54,7 +62,9 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
 
     func tableViewSelectionDidChange(_ notification: Notification) {
         guard sidebar.selectedRow >= 0 else { return }
-        showPage(entries[sidebar.selectedRow].id)
+        let id = entries[sidebar.selectedRow].id
+        guard id != currentId || content.subviews.isEmpty else { return }
+        showPage(id)
     }
 
     private func reloadEntries() {
@@ -64,11 +74,13 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
 
     private func select(_ id: String) {
         guard let row = entries.firstIndex(where: { $0.id == id }) else { return }
+        currentId = id
         sidebar.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         showPage(id)
     }
 
     private func showPage(_ id: String) {
+        currentId = id
         content.subviews.forEach { $0.removeFromSuperview() }
         let page = id == Self.generalId ? GeneralPane(registry: registry) : modulePage(id)
         page.translatesAutoresizingMaskIntoConstraints = false
@@ -103,7 +115,11 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
         split.dividerStyle = .thin
         split.addArrangedSubview(scroll)
         split.addArrangedSubview(content)
-        scroll.widthAnchor.constraint(equalToConstant: 200).isActive = true
+        let width = scroll.widthAnchor.constraint(equalToConstant: 200)
+        width.priority = .defaultLow
+        width.isActive = true
+        scroll.widthAnchor.constraint(greaterThanOrEqualToConstant: 160).isActive = true
+        split.setHoldingPriority(.defaultHigh, forSubviewAt: 0)
         window?.contentView = split
     }
 }
@@ -138,13 +154,21 @@ private final class ModulePage: NSStackView {
     }
 
     private func permissionRow(_ permission: ModulePermission) -> NSView {
-        let granted = PermissionCenter.status(permission) == .granted
-        let label = NSTextField(labelWithString: "\(permission.title): \(granted ? "granted" : "required")")
-        label.textColor = granted ? .secondaryLabelColor : .systemOrange
-        guard !granted else { return label }
+        let status = PermissionCenter.status(permission)
+        let label = NSTextField(labelWithString: "\(permission.title): \(statusText(status))")
+        label.textColor = status == .denied ? .systemOrange : .secondaryLabelColor
+        guard status == .denied else { return label }
         let button = NSButton(title: "Grant…", target: self, action: #selector(grant(_:)))
         button.identifier = .init(permission.rawValue)
         return NSStackView(views: [label, button])
+    }
+
+    private func statusText(_ status: PermissionCenter.Status) -> String {
+        switch status {
+        case .granted: return "granted"
+        case .denied: return "required"
+        case .unknown: return "asked on first use"
+        }
     }
 
     @objc private func toggleModule(_ sender: NSSwitch) {
@@ -171,6 +195,7 @@ private final class GeneralPane: NSStackView {
         title.font = .systemFont(ofSize: 20, weight: .semibold)
         addArrangedSubview(title)
         addArrangedSubview(loginItemCheckbox())
+        if SMAppService.mainApp.status == .requiresApproval { addArrangedSubview(loginApprovalRow()) }
         addArrangedSubview(NSTextField(labelWithString: "Modules"))
         registry.modules.forEach { addArrangedSubview(moduleCheckbox($0)) }
     }
@@ -181,6 +206,17 @@ private final class GeneralPane: NSStackView {
         let box = NSButton(checkboxWithTitle: "Launch Nexo at login", target: self, action: #selector(toggleLoginItem(_:)))
         box.state = SMAppService.mainApp.status == .enabled ? .on : .off
         return box
+    }
+
+    private func loginApprovalRow() -> NSView {
+        let label = NSTextField(labelWithString: "Login item needs approval in System Settings.")
+        label.textColor = .systemOrange
+        let button = NSButton(title: "Open Login Items…", target: self, action: #selector(openLoginItems))
+        return NSStackView(views: [label, button])
+    }
+
+    @objc private func openLoginItems() {
+        SMAppService.openSystemSettingsLoginItems()
     }
 
     private func moduleCheckbox(_ module: NexoModule) -> NSButton {
