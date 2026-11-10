@@ -10,6 +10,7 @@ final class MonitorModule: NexoModule {
 
     private enum Key {
         static let metrics = "monitor.metrics"
+        static let order = "monitor.order"
         static let interval = "monitor.interval"
         static let style = "monitor.style"
     }
@@ -21,12 +22,22 @@ final class MonitorModule: NexoModule {
     private let popover = NSPopover()
     private var detail: MonitorDetailViewController?
 
+    /// Metrics shown in the menu bar, in the user's order.
     private var metrics: [Metric] {
         get {
             let stored = UserDefaults.standard.stringArray(forKey: Key.metrics) ?? [Metric.cpu, .memory].map(\.rawValue)
-            return Metric.allCases.filter { stored.contains($0.rawValue) }
+            return order.filter { stored.contains($0.rawValue) }
         }
         set { UserDefaults.standard.set(newValue.map(\.rawValue), forKey: Key.metrics) }
+    }
+
+    /// Every metric in the user's order (menu bar and popover); metrics added in later versions go last.
+    private var order: [Metric] {
+        get {
+            let stored = (UserDefaults.standard.stringArray(forKey: Key.order) ?? []).compactMap(Metric.init(rawValue:))
+            return stored + Metric.allCases.filter { !stored.contains($0) }
+        }
+        set { UserDefaults.standard.set(newValue.map(\.rawValue), forKey: Key.order) }
     }
 
     private var interval: TimeInterval {
@@ -66,11 +77,12 @@ final class MonitorModule: NexoModule {
     }
 
     func settingsView() -> NSView {
-        let checkboxes = Metric.allCases.map { metric -> NSButton in
-            let box = NSButton(checkboxWithTitle: metric.title, target: self, action: #selector(metricToggled(_:)))
-            box.identifier = .init(metric.rawValue)
-            box.state = metrics.contains(metric) ? .on : .off
-            return box
+        let list = MetricOrderList(order: order, enabled: Set(metrics))
+        list.onChange = { [weak self] order, enabled in
+            guard let self else { return }
+            self.order = order
+            self.metrics = order.filter(enabled.contains)
+            self.applySettings()
         }
         let intervalPopUp = NSPopUpButton()
         Self.intervals.forEach { intervalPopUp.addItem(withTitle: "\(Int($0)) s") }
@@ -84,7 +96,8 @@ final class MonitorModule: NexoModule {
         stylePopUp.action = #selector(styleChanged(_:))
         return SettingsForm.stack([
             SettingsForm.header("Shown in the menu bar"),
-            SettingsForm.stack(checkboxes, spacing: 6),
+            list,
+            SettingsForm.note("Drag to reorder. The order applies to the menu bar and to the detail popover."),
             SettingsForm.row("Update every", intervalPopUp),
             SettingsForm.row("Widget style", stylePopUp),
             SettingsForm.note("Memory shows the kernel's memory pressure, the same value and color as Activity Monitor (green normal, yellow warning, red critical). Used/wired/compressed memory is in the detail popover. Temperatures use a private macOS API and may be missing on some versions."),
@@ -138,21 +151,13 @@ final class MonitorModule: NexoModule {
             detail = nil
             return
         }
-        let controller = MonitorDetailViewController()
+        let controller = MonitorDetailViewController(order: order)
         detail = controller
         _ = controller.view
         controller.update(sampler.latest, history: sampler.history, networkHistory: sampler.networkHistory)
         popover.contentViewController = controller
         popover.behavior = .transient
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
-    }
-
-    @objc private func metricToggled(_ sender: NSButton) {
-        guard let raw = sender.identifier?.rawValue, let metric = Metric(rawValue: raw) else { return }
-        var current = metrics
-        if sender.state == .on { current.append(metric) } else { current.removeAll { $0 == metric } }
-        metrics = current
-        applySettings()
     }
 
     @objc private func intervalChanged(_ sender: NSPopUpButton) {
@@ -163,5 +168,79 @@ final class MonitorModule: NexoModule {
     @objc private func styleChanged(_ sender: NSPopUpButton) {
         style = MonitorWidgetStyle(rawValue: sender.indexOfSelectedItem) ?? .text
         applySettings()
+    }
+}
+
+/// Metric list for settings: checkbox to show it in the menu bar, drag to reorder.
+final class MetricOrderList: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
+    private static let dragType = NSPasteboard.PasteboardType("com.luckylopolis.nexo.monitor.metric")
+    private let table = NSTableView()
+    private var order: [Metric]
+    private var enabled: Set<Metric>
+    var onChange: (([Metric], Set<Metric>) -> Void)?
+
+    init(order: [Metric], enabled: Set<Metric>) {
+        self.order = order
+        self.enabled = enabled
+        super.init(frame: NSRect(x: 0, y: 0, width: 260, height: 0))
+        let column = NSTableColumn(identifier: .init("metric"))
+        table.addTableColumn(column)
+        table.headerView = nil
+        table.rowHeight = 24
+        table.style = .inset
+        table.usesAlternatingRowBackgroundColors = false
+        table.dataSource = self
+        table.delegate = self
+        table.registerForDraggedTypes([Self.dragType])
+        table.draggingDestinationFeedbackStyle = .gap
+        documentView = table
+        hasVerticalScroller = false
+        borderType = .noBorder
+        drawsBackground = false
+        translatesAutoresizingMaskIntoConstraints = false
+        widthAnchor.constraint(equalToConstant: 260).isActive = true
+        heightAnchor.constraint(equalToConstant: CGFloat(order.count) * (table.rowHeight + table.intercellSpacing.height) + 12).isActive = true
+    }
+
+    required init?(coder: NSCoder) { fatalError("programmatic only") }
+
+    func numberOfRows(in tableView: NSTableView) -> Int { order.count }
+
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        let metric = order[row]
+        let box = NSButton(checkboxWithTitle: metric.title, target: self, action: #selector(toggled(_:)))
+        box.identifier = .init(metric.rawValue)
+        box.state = enabled.contains(metric) ? .on : .off
+        let handle = NSImageView(image: NSImage(systemSymbolName: "line.3.horizontal", accessibilityDescription: "Drag to reorder")!)
+        handle.contentTintColor = .tertiaryLabelColor
+        let row = NSStackView(views: [box, NSView(), handle])
+        row.edgeInsets = NSEdgeInsets(top: 0, left: 4, bottom: 0, right: 6)
+        return row
+    }
+
+    func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
+        let item = NSPasteboardItem()
+        item.setString(String(row), forType: Self.dragType)
+        return item
+    }
+
+    func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
+        dropOperation == .above ? .move : []
+    }
+
+    func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
+        guard let raw = info.draggingPasteboard.pasteboardItems?.first?.string(forType: Self.dragType),
+              let from = Int(raw), order.indices.contains(from) else { return false }
+        let metric = order.remove(at: from)
+        order.insert(metric, at: from < row ? row - 1 : row)
+        tableView.reloadData()
+        onChange?(order, enabled)
+        return true
+    }
+
+    @objc private func toggled(_ sender: NSButton) {
+        guard let raw = sender.identifier?.rawValue, let metric = Metric(rawValue: raw) else { return }
+        if sender.state == .on { enabled.insert(metric) } else { enabled.remove(metric) }
+        onChange?(order, enabled)
     }
 }

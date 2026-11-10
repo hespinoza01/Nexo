@@ -10,6 +10,7 @@ final class MonitorDetailViewController: NSViewController {
     private static let uploadColor = NSColor.systemRed
     private static let downloadColor = NSColor.systemBlue
 
+    private let order: [Metric]
     private var sections = [Metric: MonitorSection]()
     private let cpuRing = RingGaugeView()
     private let cpuTable = InfoTable()
@@ -26,6 +27,13 @@ final class MonitorDetailViewController: NSViewController {
     private let diskTable = InfoTable()
     private let batteryRing = RingGaugeView()
     private let batteryTable = InfoTable()
+
+    init(order: [Metric] = Metric.allCases) {
+        self.order = order
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError("programmatic only") }
 
     override func loadView() {
         let title = NSTextField(labelWithString: "System Monitor")
@@ -44,7 +52,7 @@ final class MonitorDetailViewController: NSViewController {
         sections[.disk] = MonitorSection("Disk", [Self.ringRow(diskRing, diskTable)])
         sections[.battery] = MonitorSection("Battery", [Self.ringRow(batteryRing, batteryTable)])
 
-        let stack = NSStackView(views: [header] + Metric.allCases.compactMap { sections[$0] })
+        let stack = NSStackView(views: [header] + order.compactMap { sections[$0] })
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 6

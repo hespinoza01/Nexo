@@ -144,6 +144,13 @@ enum MonitorFormat {
         return value < 10 && unit > 0 ? String(format: "%.1f%@/s", value, units[unit]) : "\(Int(value))\(units[unit])/s"
     }
 
+    /// "709 KB/s": the rate with a space before the unit, for the menu bar network widget.
+    static func spacedRate(_ bytesPerSecond: Double) -> String {
+        let text = rate(bytesPerSecond)
+        guard let index = text.firstIndex(where: { $0.isLetter }) else { return text }
+        return text[..<index] + " " + text[index...]
+    }
+
     /// "28.9 GB": one decimal, short enough for a value column.
     static func gigabytes(_ value: UInt64) -> String {
         let gb = Double(value) / 1_073_741_824

@@ -19,17 +19,23 @@ final class MonitorWidgetView: NSView {
     var sample = MonitorSample() { didSet { needsDisplay = true } }
 
     private static let segmentWidth: CGFloat = 40
+    private static let networkWidth: CGFloat = 66
+    private static let networkFont = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
     private static let indicatorWidth: CGFloat = 5
     private static let labelFont = NSFont.systemFont(ofSize: 7, weight: .semibold)
     private static let valueFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium)
 
     override var intrinsicContentSize: NSSize {
-        NSSize(width: CGFloat(max(1, metrics.count)) * Self.segmentWidth, height: NSStatusBar.system.thickness)
+        NSSize(width: max(Self.segmentWidth, metrics.map(width(of:)).reduce(0, +)), height: NSStatusBar.system.thickness)
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        for (index, metric) in metrics.enumerated() {
-            drawSegment(metric, in: NSRect(x: CGFloat(index) * Self.segmentWidth, y: 0, width: Self.segmentWidth, height: bounds.height))
+        var x: CGFloat = 0
+        for metric in metrics {
+            let width = width(of: metric)
+            let rect = NSRect(x: x, y: 0, width: width, height: bounds.height)
+            metric == .network ? drawNetwork(in: rect) : drawSegment(metric, in: rect)
+            x += width
         }
     }
 
@@ -85,6 +91,25 @@ final class MonitorWidgetView: NSView {
         draw(metric.shortLabel, font: Self.labelFont, color: .secondaryLabelColor, at: NSPoint(x: textRect.minX, y: rect.midY + 1))
         let valueColor = style == .text && metric == .memory ? color : NSColor.labelColor
         draw(Self.value(metric, sample), font: Self.valueFont, color: valueColor, at: NSPoint(x: textRect.minX, y: rect.midY - 11))
+    }
+
+    private func width(of metric: Metric) -> CGFloat {
+        metric == .network ? Self.networkWidth : Self.segmentWidth
+    }
+
+    /// Upload over download, arrows tinted when traffic is flowing (like Stats).
+    private func drawNetwork(in rect: NSRect) {
+        let network = sample.network
+        let rows: [(String, Double?, NSColor)] = [("↑", network?.upload, .systemRed), ("↓", network?.download, .systemBlue)]
+        for (index, row) in rows.enumerated() {
+            let y = index == 0 ? rect.midY : rect.midY - 10
+            let active = (row.1 ?? 0) >= 1024
+            draw(row.0, font: Self.networkFont, color: active ? row.2 : .secondaryLabelColor, at: NSPoint(x: rect.minX + 2, y: y))
+            let text = row.1.map(MonitorFormat.spacedRate) ?? "–"
+            let attributes: [NSAttributedString.Key: Any] = [.font: Self.networkFont]
+            let width = (text as NSString).size(withAttributes: attributes).width
+            draw(text, font: Self.networkFont, color: .labelColor, at: NSPoint(x: rect.maxX - 3 - width, y: y))
+        }
     }
 
     private func drawBar(_ fraction: Double, color: NSColor, in rect: NSRect) {
