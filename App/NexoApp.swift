@@ -38,5 +38,8 @@ enum NexoCore {
         registry.register(MonitorModule())
         registry.register(SimulatorsModule())
         registry.register(SnappingModule())
+        registry.register(ClipboardModule())
+        registry.register(PortsModule())
+        registry.register(QuitProtectionModule())
     }
 }
