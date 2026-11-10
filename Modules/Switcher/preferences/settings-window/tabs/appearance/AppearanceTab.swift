@@ -375,6 +375,7 @@ class AppearanceTab: NSObject {
     static var animationsButton: NSButton!
     static var customizeStyleSheet: CustomizeStyleSheet!
     static var animationsSheet: AnimationsSheet!
+    static var nexoStyleButton: NSButton!
 
     /// One icon button per overridable preference, parked at the trailing edge of each row (same
     /// position as the "unlink" icon in the per-shortcut Appearance section in `ControlsTab`).
@@ -385,6 +386,7 @@ class AppearanceTab: NSObject {
     static func initTab() -> NSView {
         customizeStyleButton = NSButton(title: getCustomizeStyleButtonTitle(), target: self, action: #selector(showCustomizeStyleSheet))
         animationsButton = NSButton(title: NSLocalizedString("Animations", comment: "") + "…", target: self, action: #selector(showAnimationsSheet))
+        nexoStyleButton = NSButton(title: NSLocalizedString("Colors, shapes & presets", comment: "Nexo style editor") + "…", target: self, action: #selector(showNexoStyleSheet))
         // Sheets are constructed lazily on first show — see `showCustomizeStyleSheet` /
         // `showAnimationsSheet`. Pre-build search is satisfied by the sheets' static
         // `searchableStrings`, consulted through `SettingsSearchIndex`.
@@ -411,7 +413,7 @@ class AppearanceTab: NSObject {
         // 20pt here pushes the TGV content to `container.leading + 20`, while the section title
         // sits at `container.leading + TableGroupView.padding(10)` — a 10pt visible misalignment
         // between the title and the row content below it.
-        let view = TableGroupSetView(originalViews: [appearanceView, multipleScreensView, animationsButton], titleTableGroupSpacing: 15, padding: 0, bottomPadding: 0)
+        let view = TableGroupSetView(originalViews: [appearanceView, multipleScreensView, NSStackView(views: [nexoStyleButton, animationsButton])], titleTableGroupSpacing: 15, padding: 0, bottomPadding: 0)
         view.translatesAutoresizingMaskIntoConstraints = false
         view.widthAnchor.constraint(equalToConstant: view.fittingSize.width).isActive = true
         return view
@@ -542,6 +544,10 @@ class AppearanceTab: NSObject {
     @objc static func showCustomizeStyleSheet() {
         if customizeStyleSheet == nil { customizeStyleSheet = CustomizeStyleSheet() }
         SettingsWindow.shared.beginSheetWithSearchHighlight(customizeStyleSheet)
+    }
+
+    @objc static func showNexoStyleSheet() {
+        SettingsWindow.shared.beginSheetWithSearchHighlight(ThemeEditorSheet())
     }
 
     @objc static func showAnimationsSheet() {

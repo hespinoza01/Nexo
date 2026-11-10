@@ -83,12 +83,20 @@ class TilesPanel: NSPanel {
         highWaterHeight = 0
     }
 
+    /// Whether hiding fades: the Nexo theme's hide animation when set, else AltTab's preference.
+    static var fadesOut: Bool { Appearance.hideAnimation.map { $0 != .none } ?? Preferences.fadeOutAnimation }
+
     override func orderOut(_ sender: Any?) {
         beginOrderOut()
-        if Preferences.fadeOutAnimation {
+        // Nexo theme overrides AltTab's fade-out switch when it sets a hide animation.
+        let hideAnimation = Appearance.hideAnimation
+        if Self.fadesOut {
             let generation = showGeneration
             NSAnimationContext.runAnimationGroup(
-                { _ in animator().alphaValue = 0 },
+                { context in
+                    if let hideAnimation { context.duration = hideAnimation.duration }
+                    self.animator().alphaValue = 0
+                },
                 completionHandler: {
                     // A re-summon during the fade must not have its fresh panel ordered out by the stale fade.
                     guard self.showGeneration == generation else { return }
@@ -130,7 +138,7 @@ class TilesPanel: NSPanel {
     /// panel once it has fronted the target; the limit covers a focus that never does (refused, superseded,
     /// queued behind older ones). The fade-out already keeps the panel ordered in longer than that.
     func orderOutOnceFronted() -> () -> Void {
-        guard !Preferences.fadeOutAnimation else {
+        guard !Self.fadesOut else {
             App.hideTilesPanelWithoutChangingKeyWindow()
             return {}
         }
@@ -161,8 +169,17 @@ class TilesPanel: NSPanel {
         // The panel may have been hidden (alpha=0) by `App.showUiOrCycleSelection` on a
         // cross-shortcut summon to mask the rebuild. Reveal it atomically now that contents
         // and Appearance are in their final state.
-        alphaValue = 1
-        makeKeyAndOrderFront(nil)
+        if let animation = Appearance.showAnimation, animation != .none {
+            alphaValue = 0
+            makeKeyAndOrderFront(nil)
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = animation.duration
+                animator().alphaValue = 1
+            }
+        } else {
+            alphaValue = 1
+            makeKeyAndOrderFront(nil)
+        }
         // The artificial key-repeat measures its initial-delay grace from when the panel could be SEEN, and this
         // is the only anchor for that which is guaranteed to exist — see `SwitcherSession.panelShownAt`. Set
         // once per summon (a re-show within one session must not restart the grace under the user's fingers).

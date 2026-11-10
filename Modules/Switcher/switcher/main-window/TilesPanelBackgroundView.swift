@@ -14,6 +14,9 @@ extension EffectView {
 extension NSGlassEffectView: EffectView {
     func updateAppearance(cornerRadius: CGFloat) {
         self.cornerRadius = cornerRadius
+        tintColor = Appearance.panelTintColor
+        layer!.borderWidth = Appearance.panelBorderWidth
+        layer!.borderColor = Appearance.panelBorderColor?.cgColor
         // Left rectangular, the clip set in `makeGlassEffectView` draws a straight outline outside the
         // glass shape on macOS 27 (#5757). Set here, not there: cached views are reused across style
         // and size changes.
@@ -34,9 +37,24 @@ class FrostedGlassEffectView: NSVisualEffectView, EffectView {
         updateAppearance()
     }
 
+    private let tintLayer = CALayer()
+
     func updateAppearance(cornerRadius: CGFloat) {
         material = Appearance.material
         updateRoundedCorners(cornerRadius)
+        applyNexoTint(cornerRadius)
+    }
+
+    /// Nexo theme: a translucent color wash and a border over the blur.
+    private func applyNexoTint(_ cornerRadius: CGFloat) {
+        guard let layer else { return }
+        if tintLayer.superlayer == nil { layer.addSublayer(tintLayer) }
+        tintLayer.frame = layer.bounds
+        tintLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
+        tintLayer.cornerRadius = cornerRadius
+        tintLayer.backgroundColor = Appearance.panelTintColor?.cgColor
+        tintLayer.borderWidth = Appearance.panelBorderWidth
+        tintLayer.borderColor = Appearance.panelBorderColor?.cgColor
     }
 
     /// using layer!.cornerRadius works but the corners are aliased; this custom approach gives smooth rounded corners

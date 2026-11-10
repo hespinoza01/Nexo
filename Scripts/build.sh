@@ -39,5 +39,5 @@ echo "App: $root/$app"
 if $run; then
   pkill -x Nexo 2>/dev/null || true
   while pgrep -x Nexo >/dev/null; do sleep 0.1; done
-  open "$app"
+  open "$app" || { sleep 1; open "$app"; }
 fi

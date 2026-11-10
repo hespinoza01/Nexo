@@ -30,10 +30,13 @@ class Appearance {
 
     // theme: constants
     static var enablePanelShadow = true
-    static var highlightFocusedBackgroundColor: NSColor { get { NSColor.systemAccentColor.withAlphaComponent(0.2) } }
-    static var highlightHoveredBackgroundColor: NSColor { get { NSColor.systemAccentColor.withAlphaComponent(0.1) } }
-    static var highlightFocusedBorderColor: NSColor { get { NSColor.systemAccentColor } }
-    static var highlightHoveredBorderColor: NSColor { get { NSColor.systemAccentColor.withAlphaComponent(0.7) } }
+    /// Nexo theme override for the selection color (nil = system accent).
+    static var themeHighlightColor: NSColor?
+    private static var highlightBase: NSColor { themeHighlightColor ?? NSColor.systemAccentColor }
+    static var highlightFocusedBackgroundColor: NSColor { get { highlightBase.withAlphaComponent(0.2 * highlightBase.alphaComponent) } }
+    static var highlightHoveredBackgroundColor: NSColor { get { highlightBase.withAlphaComponent(0.1 * highlightBase.alphaComponent) } }
+    static var highlightFocusedBorderColor: NSColor { get { highlightBase } }
+    static var highlightHoveredBorderColor: NSColor { get { highlightBase.withAlphaComponent(0.7 * highlightBase.alphaComponent) } }
     static var searchMatchHighlightColor: NSColor { get { NSColor.systemYellow.withAlphaComponent(0.5) } }
     static var searchMatchForegroundColor: NSColor { get { NSColor(calibratedWhite: 0.12, alpha: 1) } }
 
@@ -47,7 +50,35 @@ class Appearance {
     static func update() {
         updateSize()
         updateTheme()
+        applyNexoTheme(ThemeStore.shared.active)
     }
+
+    /// Nexo: user overrides on top of the values computed above (see `SwitcherTheme`).
+    private static func applyNexoTheme(_ theme: SwitcherTheme) {
+        if let value = theme.panelCornerRadius { windowCornerRadius = value }
+        if let value = theme.tileCornerRadius { cellCornerRadius = value }
+        if let value = theme.panelPadding { windowPadding = value }
+        if let value = theme.highlightBorderWidth { highlightBorderWidth = value }
+        if let value = theme.iconScale { iconSize = (iconSize * value).rounded() }
+        if let value = theme.fontSize {
+            fontHeight = value
+            updateFont()
+        }
+        if let color = NSColor(hex: theme.textColor) { fontColor = color }
+        if let material = theme.material { self.material = material.effectMaterial }
+        themeHighlightColor = NSColor(hex: theme.highlightColor)
+        panelTintColor = NSColor(hex: theme.tintColor)
+        panelBorderColor = NSColor(hex: theme.borderColor)
+        panelBorderWidth = theme.borderWidth ?? 0
+        showAnimation = theme.showAnimation
+        hideAnimation = theme.hideAnimation
+    }
+
+    static var panelTintColor: NSColor?
+    static var panelBorderColor: NSColor?
+    static var panelBorderWidth = CGFloat(0)
+    static var showAnimation: SwitcherTheme.Animation?
+    static var hideAnimation: SwitcherTheme.Animation?
 
     private static func updateSize() {
         let isHorizontalScreen = NSScreen.preferred.isHorizontal()
