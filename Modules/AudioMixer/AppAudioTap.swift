@@ -52,7 +52,9 @@ final class AppAudioTap {
         guard AudioHardwareCreateProcessTap(description, &tapID) == noErr, tapID != 0 else { return false }
         var format = AudioStreamBasicDescription()
         guard CoreAudioProperty.read(tapID, kAudioTapPropertyFormat, &format), format.mFormatID == kAudioFormatLinearPCM,
-              format.mFormatFlags & kAudioFormatFlagIsFloat != 0, format.mBitsPerChannel == 32 else { return false }
+              format.mFormatFlags & kAudioFormatFlagIsFloat != 0, format.mBitsPerChannel == 32,
+              // render() reads one interleaved tap buffer; anything else would mute the app into silence.
+              format.mFormatFlags & kAudioFormatFlagIsNonInterleaved == 0, format.mChannelsPerFrame > 0 else { return false }
         let aggregate: [String: Any] = [
             kAudioAggregateDeviceNameKey: "Nexo Mixer \(app.name)",
             kAudioAggregateDeviceUIDKey: "com.luckylopolis.nexo.mixer.\(UUID().uuidString)",
@@ -85,6 +87,10 @@ enum MixRender {
             return
         }
         let sourceChannels = Int(source.mNumberChannels)
+        guard sourceChannels > 0 else {
+            silence(output)
+            return
+        }
         let sourceFrames = Int(source.mDataByteSize) / (MemoryLayout<Float>.size * max(1, sourceChannels))
         let samples = sourceData.assumingMemoryBound(to: Float.self)
         var outputChannel = 0
@@ -116,7 +122,14 @@ enum MixRender {
 
     /// The aggregate's input side is the tap: the last buffer carrying the tap's channel count.
     private static func tapBuffer(_ input: UnsafeMutableAudioBufferListPointer, tapChannels: Int) -> AudioBuffer? {
-        input.reversed().first { Int($0.mNumberChannels) == tapChannels && $0.mData != nil && $0.mDataByteSize > 0 }
+        // Index walk, not `reversed()`: that can allocate an Array on the IO thread.
+        var index = input.count - 1
+        while index >= 0 {
+            let buffer = input[index]
+            if Int(buffer.mNumberChannels) == tapChannels && buffer.mData != nil && buffer.mDataByteSize > 0 { return buffer }
+            index -= 1
+        }
+        return nil
     }
 
     private static func silence(_ output: UnsafeMutableAudioBufferListPointer) {

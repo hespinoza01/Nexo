@@ -21,6 +21,7 @@ final class AudioMixerModule: NexoModule {
     }
 
     func start() {
+        guard !isRunning else { return }
         isRunning = true
         installListeners()
         reconcile()
@@ -49,7 +50,7 @@ final class AudioMixerModule: NexoModule {
             let icon = NSRunningApplication(processIdentifier: app.pid)?.icon
             let current = Double(gains[app.bundleID] ?? 1) * 100
             items.append(sliderItem(title: app.name, icon: icon, value: current, max: 150, identifier: app.bundleID) { [weak self] value in
-                self?.setGain(Float(value / 100), for: app)
+                self?.setGain(Float(value / 100), bundleID: app.bundleID)
             })
         }
         return items
@@ -64,10 +65,16 @@ final class AudioMixerModule: NexoModule {
         ])
     }
 
-    private func setGain(_ gain: Float, for app: AudioApp) {
+    /// Looks the app up again: the menu's snapshot may be older than the processes it now has.
+    private func setGain(_ gain: Float, bundleID: String) {
         var stored = gains
-        stored[app.bundleID] = abs(gain - 1) < 0.01 ? nil : gain
+        stored[bundleID] = abs(gain - 1) < 0.01 ? nil : gain
         gains = stored
+        if let tap = taps[bundleID], abs(gain - 1) >= 0.01 {
+            tap.gain.value = gain
+            return
+        }
+        guard let app = AudioSystem.apps().first(where: { $0.bundleID == bundleID }) else { return }
         apply(gain, to: app)
     }
 
@@ -92,6 +99,8 @@ final class AudioMixerModule: NexoModule {
     /// Re-creates taps for apps with a stored gain (new process, device switch) and drops taps of apps
     /// that quit.
     private func reconcile() {
+        // A listener event queued before stop() must not recreate (muting) taps.
+        guard isRunning else { return }
         let stored = gains
         let apps = AudioSystem.apps()
         let byBundle = Dictionary(apps.map { ($0.bundleID, $0) }, uniquingKeysWith: { first, _ in first })
@@ -108,6 +117,8 @@ final class AudioMixerModule: NexoModule {
         taps.values.forEach { $0.stop() }
         taps.removeAll()
         reconcile()
+        // A just-connected output (Bluetooth) may not accept an aggregate yet: retry once shortly after.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.reconcile() }
     }
 
     private func installListeners() {

@@ -49,8 +49,10 @@ struct AudioApp: Equatable {
 enum AudioSystem {
     /// "com.google.Chrome.helper.Renderer" → "com.google.Chrome"; other ids unchanged.
     static func familyID(_ bundleID: String) -> String {
-        guard let range = bundleID.range(of: ".helper", options: .caseInsensitive) else { return bundleID }
-        return String(bundleID[..<range.lowerBound])
+        // ".helper" as a whole component: "com.acme.helpertools" is not a helper.
+        let components = bundleID.split(separator: ".", omittingEmptySubsequences: false)
+        guard let index = components.firstIndex(where: { $0.lowercased() == "helper" }), index > 0 else { return bundleID }
+        return components[..<index].joined(separator: ".")
     }
 
     /// Apps with CoreAudio process objects, grouped by family, the ones playing first.
