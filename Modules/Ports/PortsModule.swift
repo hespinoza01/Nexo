@@ -9,6 +9,13 @@ struct ListeningPort: Equatable, Hashable {
 
 /// TCP ports in LISTEN state, via `lsof -F` (machine-readable fields, run with an argument array).
 enum PortScanner {
+    /// Re-reads one process right before signalling it: the menu may show a scan from minutes ago and
+    /// the pid could now belong to something else.
+    static func stillListening(_ port: ListeningPort) -> Bool {
+        guard let result = Shell.run("/usr/sbin/lsof", ["-nP", "-a", "-p", String(port.pid), "-iTCP:\(port.port)", "-sTCP:LISTEN", "-F", "pcn"], timeout: 5) else { return false }
+        return parse(result.output).contains { $0.pid == port.pid && $0.port == port.port && $0.command == port.command }
+    }
+
     static func scan() -> [ListeningPort] {
         guard let result = Shell.run("/usr/sbin/lsof", ["-nP", "-iTCP", "-sTCP:LISTEN", "-F", "pcn"], timeout: 10) else { return [] }
         return parse(result.output)
@@ -95,7 +102,7 @@ final class PortsModule: NexoModule {
         for (title, signal) in [("Quit (SIGTERM)", SIGTERM), ("Force Kill (SIGKILL)…", SIGKILL)] {
             let action = NSMenuItem(title: title, action: #selector(stopProcess(_:)), keyEquivalent: "")
             action.target = self
-            action.representedObject = [Int(port.pid), Int(signal), port.port]
+            action.representedObject = ["port": port, "signal": signal] as [String: Any]
             actions.addItem(action)
         }
         let copy = NSMenuItem(title: "Copy http://localhost:\(port.port)", action: #selector(copyURL(_:)), keyEquivalent: "")
@@ -108,22 +115,36 @@ final class PortsModule: NexoModule {
     }
 
     @objc private func stopProcess(_ sender: NSMenuItem) {
-        guard let values = sender.representedObject as? [Int], values.count == 3 else { return }
-        let pid = Int32(values[0])
-        let signal = Int32(values[1])
-        if signal == SIGKILL, !confirmForceKill(pid: pid, port: values[2]) { return }
-        if kill(pid, signal) != 0 {
-            let alert = NSAlert()
-            alert.messageText = "Couldn't stop process \(pid)"
-            alert.informativeText = String(cString: strerror(errno))
-            alert.runModal()
+        guard let values = sender.representedObject as? [String: Any], let port = values["port"] as? ListeningPort,
+              let signal = values["signal"] as? Int32, port.pid > 1 else { return }
+        if signal == SIGKILL, !confirmForceKill(port) { return }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard PortScanner.stillListening(port) else {
+                DispatchQueue.main.async {
+                    self?.showError("Port \(port.port) is no longer held by \(port.command) (pid \(port.pid)). Nothing was stopped.")
+                    self?.refresh()
+                }
+                return
+            }
+            let result = kill(port.pid, signal)
+            let error = errno
+            DispatchQueue.main.async {
+                if result != 0 { self?.showError("Couldn't stop \(port.command) (pid \(port.pid)): \(String(cString: strerror(error)))") }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self?.refresh() }
+            }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.refresh() }
     }
 
-    private func confirmForceKill(pid: Int32, port: Int) -> Bool {
+    private func showError(_ text: String) {
         let alert = NSAlert()
-        alert.messageText = "Force kill process \(pid) on port \(port)?"
+        alert.messageText = text
+        NSApp.activate()
+        alert.runModal()
+    }
+
+    private func confirmForceKill(_ port: ListeningPort) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "Force kill \(port.command) (pid \(port.pid)) on port \(port.port)?"
         alert.informativeText = "The process won't get a chance to save its state."
         alert.addButton(withTitle: "Force Kill").hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")

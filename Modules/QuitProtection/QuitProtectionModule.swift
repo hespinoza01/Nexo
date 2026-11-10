@@ -19,6 +19,9 @@ final class QuitProtectionModule: NexoModule {
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var pressStart: Date?
+    /// True from a ⌘Q keyDown until Q or ⌘ is released. Autorepeat keyDowns while held never start a new
+    /// countdown, so holding ⌘Q past one quit can't cascade into quitting the next frontmost app.
+    private var qHeld = false
     private var pendingQuit: DispatchWorkItem?
     private let hint = QuitHint()
 
@@ -40,7 +43,11 @@ final class QuitProtectionModule: NexoModule {
     func stop() {
         isRunning = false
         cancel()
-        if let tap { CGEvent.tapEnable(tap: tap, enable: false) }
+        qHeld = false
+        if let tap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            CFMachPortInvalidate(tap)
+        }
         if let runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes) }
         tap = nil
         runLoopSource = nil
@@ -85,27 +92,31 @@ final class QuitProtectionModule: NexoModule {
     }
 
     private func handle(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
-        // macOS disables a tap that is too slow or on user input timeouts; turn it back on.
+        // macOS disables a tap that is too slow or on user input timeouts; the key-up may have been lost
+        // meanwhile, so drop any countdown before turning it back on.
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            cancel()
+            qHeld = false
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
             return Unmanaged.passUnretained(event)
         }
-        let isQ = event.getIntegerValueField(.keyboardEventKeycode) == Int64(kVK_ANSI_Q)
-        let flags = event.flags.intersection([.maskCommand, .maskShift, .maskControl, .maskAlternate])
-        let isCommandQ = isQ && flags == .maskCommand
-        switch type {
-        case .keyDown where isCommandQ:
-            guard !isExcluded() else { return Unmanaged.passUnretained(event) }
-            if pressStart == nil { begin() }
+        let decision = QuitKeyDecision.decide(type: type,
+            keyCode: event.getIntegerValueField(.keyboardEventKeycode),
+            flags: event.flags,
+            isAutorepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0,
+            qHeld: qHeld,
+            excluded: type == .keyDown ? isExcluded() : false)
+        switch decision {
+        case .pass: return Unmanaged.passUnretained(event)
+        case .swallow: return nil
+        case .startCountdown:
+            qHeld = true
+            begin()
             return nil
-        case .keyUp where isQ && pressStart != nil:
+        case .release(let swallow):
+            qHeld = false
             cancel()
-            return nil
-        case .flagsChanged where pressStart != nil && !event.flags.contains(.maskCommand):
-            cancel()
-            return Unmanaged.passUnretained(event)
-        default:
-            return Unmanaged.passUnretained(event)
+            return swallow ? nil : Unmanaged.passUnretained(event)
         }
     }
 
@@ -120,6 +131,10 @@ final class QuitProtectionModule: NexoModule {
         hint.show("Hold ⌘Q to quit \(app?.localizedName ?? "")", duration: holdSeconds)
         let work = DispatchWorkItem { [weak self] in
             self?.cancel()
+            // Only quit if ⌘Q is physically still down: the release events may never have reached the tap.
+            let qDown = CGEventSource.keyState(.combinedSessionState, key: CGKeyCode(kVK_ANSI_Q))
+            let commandDown = CGEventSource.flagsState(.combinedSessionState).contains(.maskCommand)
+            guard qDown && commandDown else { return }
             app?.terminate()
         }
         pendingQuit = work
@@ -200,5 +215,29 @@ final class QuitHint {
         self.panel = panel
         progress = bar
         return panel
+    }
+}
+
+/// Pure ⌘Q state machine for the event tap, unit-testable without CGEvents.
+enum QuitKeyDecision: Equatable {
+    case pass
+    case swallow
+    case startCountdown
+    case release(swallow: Bool)
+
+    static func decide(type: CGEventType, keyCode: Int64, flags: CGEventFlags, isAutorepeat: Bool, qHeld: Bool, excluded: Bool) -> QuitKeyDecision {
+        let isQ = keyCode == Int64(kVK_ANSI_Q)
+        let modifiers = flags.intersection([.maskCommand, .maskShift, .maskControl, .maskAlternate])
+        switch type {
+        case .keyDown where isQ && modifiers == .maskCommand:
+            if qHeld || isAutorepeat { return qHeld ? .swallow : .pass }
+            return excluded ? .pass : .startCountdown
+        case .keyUp where isQ && qHeld:
+            return .release(swallow: true)
+        case .flagsChanged where qHeld && !flags.contains(.maskCommand):
+            return .release(swallow: false)
+        default:
+            return .pass
+        }
     }
 }

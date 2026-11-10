@@ -11,6 +11,8 @@ struct ClipboardEntry: Codable, Equatable {
 /// (an integer read, no IPC payload) twice a second.
 final class ClipboardHistory {
     static let limit = 200
+    /// Larger copies (logs, files read as text) are skipped: they bloat the JSON that is rewritten on every copy.
+    static let maxEntryLength = 100_000
     private(set) var entries = [ClipboardEntry]()
     private let fileURL: URL
 
@@ -26,7 +28,7 @@ final class ClipboardHistory {
 
     func add(_ text: String, sourceApp: String?, now: Date = Date()) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty, text.utf16.count <= Self.maxEntryLength else { return }
         entries.removeAll { $0.text == text }
         entries.insert(ClipboardEntry(text: text, date: now, sourceApp: sourceApp), at: 0)
         if entries.count > Self.limit { entries.removeLast(entries.count - Self.limit) }
@@ -57,9 +59,13 @@ final class ClipboardHistory {
     }
 
     private func save() {
+        // umask 077 makes the atomic write's temp file owner-only from the start, not just after a chmod.
+        let previousMask = umask(0o077)
+        defer { umask(previousMask) }
         do {
-            try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try JSONEncoder().encode(entries).write(to: fileURL, options: [.atomic, .completeFileProtection])
+            try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700])
+            try JSONEncoder().encode(entries).write(to: fileURL, options: .atomic)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
         } catch {
             NSLog("Nexo: clipboard history save failed: \(error)")
@@ -77,8 +83,6 @@ final class ClipboardWatcher {
     private var timer: Timer?
     private var lastChange = NSPasteboard.general.changeCount
     var excludedApps: () -> [String] = { ClipboardWatcher.defaultExcludedApps }
-    /// Set while Nexo itself writes to the pasteboard (pasting an entry), so it isn't re-recorded.
-    var ignoreNextChange = false
 
     init(history: ClipboardHistory) {
         self.history = history
@@ -87,8 +91,9 @@ final class ClipboardWatcher {
     func start() {
         guard timer == nil else { return }
         lastChange = NSPasteboard.general.changeCount
-        let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in self?.poll() }
-        timer.tolerance = 0.2
+        // Short interval so the frontmost app read below is still the one that copied (secret filtering).
+        let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in self?.poll() }
+        timer.tolerance = 0.1
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
     }
@@ -96,6 +101,11 @@ final class ClipboardWatcher {
     func stop() {
         timer?.invalidate()
         timer = nil
+    }
+
+    /// Call right after Nexo writes to the pasteboard itself, so that write isn't recorded as a copy.
+    func markOwnWrite() {
+        lastChange = NSPasteboard.general.changeCount
     }
 
     static func shouldSkip(types: [String], sourceApp: String?, excluded: [String]) -> Bool {
@@ -108,10 +118,6 @@ final class ClipboardWatcher {
         let pasteboard = NSPasteboard.general
         guard pasteboard.changeCount != lastChange else { return }
         lastChange = pasteboard.changeCount
-        guard !ignoreNextChange else {
-            ignoreNextChange = false
-            return
-        }
         let source = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         let types = pasteboard.types?.map(\.rawValue) ?? []
         guard !Self.shouldSkip(types: types, sourceApp: source, excluded: excludedApps()),

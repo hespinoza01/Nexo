@@ -68,7 +68,7 @@ final class ClipboardModule: NexoModule {
         return SettingsForm.stack([
             SettingsForm.row("Open panel", shortcut),
             SettingsForm.row("Ignore copies from (bundle ids)", excluded),
-            SettingsForm.note("Keeps the last \(ClipboardHistory.limit) text copies in ~/Library/Application Support/Nexo/clipboard.json (owner-only permissions). Items password managers mark as concealed or transient are never stored."),
+            SettingsForm.note("Keeps the last \(ClipboardHistory.limit) text copies in ~/Library/Application Support/Nexo/clipboard.json (owner-only permissions). Items password managers mark as concealed or transient are never stored; text copied from a plain browser password field has no such mark and is stored."),
             clear,
         ])
     }
@@ -84,19 +84,32 @@ final class ClipboardModule: NexoModule {
 
     /// Put the entry on the pasteboard, give focus back, then synthesize ⌘V (needs Accessibility).
     private func paste(_ entry: ClipboardEntry, into target: NSRunningApplication?) {
-        watcher.ignoreNextChange = true
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(entry.text, forType: .string)
+        watcher.markOwnWrite()
         history.add(entry.text, sourceApp: entry.sourceApp)
+        guard AXIsProcessTrusted() else {
+            PermissionCenter.request(.accessibility)
+            return
+        }
         target?.activate()
-        guard AXIsProcessTrusted() else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            let source = CGEventSource(stateID: .combinedSessionState)
-            for down in [true, false] {
-                let event = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: down)
-                event?.flags = .maskCommand
-                event?.post(tap: .cghidEventTap)
-            }
+        postPasteWhenFrontmost(target, attempts: 20)
+    }
+
+    /// ⌘V must land in the target app, not Nexo: wait (up to ~1s) for it to be frontmost. A private event
+    /// source keeps still-held physical modifiers (⌥ from the ⌘⌥V shortcut) out of the synthesized ⌘V.
+    private func postPasteWhenFrontmost(_ target: NSRunningApplication?, attempts: Int) {
+        let isFront = target == nil || NSWorkspace.shared.frontmostApplication?.processIdentifier == target?.processIdentifier
+        guard isFront || attempts == 0 else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in self?.postPasteWhenFrontmost(target, attempts: attempts - 1) }
+            return
+        }
+        guard isFront else { return }
+        let source = CGEventSource(stateID: .privateState)
+        for down in [true, false] {
+            let event = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: down)
+            event?.flags = .maskCommand
+            event?.post(tap: .cghidEventTap)
         }
     }
 
@@ -110,9 +123,9 @@ final class ClipboardModule: NexoModule {
 
     @objc private func copyRecent(_ sender: NSMenuItem) {
         guard history.entries.indices.contains(sender.tag) else { return }
-        watcher.ignoreNextChange = true
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(history.entries[sender.tag].text, forType: .string)
+        watcher.markOwnWrite()
     }
 
     @objc private func excludedChanged(_ sender: NSTextField) {
