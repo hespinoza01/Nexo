@@ -86,6 +86,24 @@ final class MonitorTests: XCTestCase {
         XCTAssertEqual(usage, 40.0 / 100.0, accuracy: 0.0001)
     }
 
+    func testCPULoadBreakdownAndPerCore() {
+        // two cores: user, system, idle, nice
+        let load = CPUReader.load(previous: [0, 0, 0, 0, 0, 0, 0, 0], current: [30, 10, 60, 0, 0, 0, 100, 0])
+        XCTAssertEqual(load.perCore, [0.4, 0])
+        XCTAssertEqual(load.total, 0.2, accuracy: 0.0001)
+        XCTAssertEqual(load.user, 0.15, accuracy: 0.0001)
+        XCTAssertEqual(load.system, 0.05, accuracy: 0.0001)
+        XCTAssertEqual(load.idle, 0.8, accuracy: 0.0001)
+    }
+
+    func testCPULoadSurvivesCounterWrapAndIdleTicks() {
+        let wrapped = CPUReader.load(previous: [UInt64(UInt32.max) - 9, 0, 0, 0], current: [10, 0, 0, 0])
+        XCTAssertEqual(wrapped.total, 1, accuracy: 0.0001, "32-bit rollover counts as 20 user ticks, no trap")
+        let none = CPUReader.load(previous: [5, 5, 5, 5], current: [5, 5, 5, 5])
+        XCTAssertEqual(none.total, 0)
+        XCTAssertEqual(none.perCore, [0])
+    }
+
     func testRateFormatting() {
         XCTAssertEqual(MonitorFormat.rate(512), "512B/s")
         XCTAssertEqual(MonitorFormat.rate(2_500), "2.5KB/s")

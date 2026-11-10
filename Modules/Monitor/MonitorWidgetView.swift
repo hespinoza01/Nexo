@@ -44,6 +44,7 @@ final class MonitorWidgetView: NSView {
             case .critical: return .systemRed
             }
         case .cpu: return threshold(sample.cpu, warning: 0.7, critical: 0.9)
+        case .gpu: return threshold(sample.gpu?.device, warning: 0.7, critical: 0.9)
         case .temperature: return threshold(sample.temperature.map { $0.maximum / 100 }, warning: 0.8, critical: 0.95)
         case .battery: return sample.battery.map { $0.percent <= 15 && !$0.onAC ? .systemRed : .labelColor } ?? .labelColor
         case .network, .disk: return .labelColor
@@ -53,6 +54,7 @@ final class MonitorWidgetView: NSView {
     static func value(_ metric: Metric, _ sample: MonitorSample) -> String {
         switch metric {
         case .cpu: return sample.cpu.map(MonitorFormat.percent) ?? "–"
+        case .gpu: return sample.gpu.map { MonitorFormat.percent($0.device) } ?? "–"
         case .memory: return sample.pressure.percent.map { "\($0)%" } ?? "–"
         case .network: return sample.network.map { MonitorFormat.rate($0.download) } ?? "–"
         case .disk: return sample.diskFree.map { "\(Int(100 - Double($0.free) * 100 / Double(max(1, $0.total))))%" } ?? "–"
@@ -103,7 +105,7 @@ final class SparklineView: NSView {
     var values = [Double]() { didSet { needsDisplay = true } }
     var color = NSColor.controlAccentColor
 
-    override var intrinsicContentSize: NSSize { NSSize(width: 220, height: 34) }
+    override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: 24) }
 
     override func draw(_ dirtyRect: NSRect) {
         NSColor.quaternaryLabelColor.setFill()

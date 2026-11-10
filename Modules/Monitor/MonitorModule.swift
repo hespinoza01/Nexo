@@ -128,20 +128,23 @@ final class MonitorModule: NexoModule {
     private func render(_ sample: MonitorSample) {
         widget.sample = sample
         statusItem?.length = widget.intrinsicContentSize.width
-        detail?.update(sample, history: sampler.history)
+        guard popover.isShown else { return }
+        detail?.update(sample, history: sampler.history, networkHistory: sampler.networkHistory)
     }
 
     @objc private func togglePopover(_ sender: NSStatusBarButton) {
         guard !popover.isShown else {
             popover.close()
+            detail = nil
             return
         }
         let controller = MonitorDetailViewController()
         detail = controller
+        _ = controller.view
+        controller.update(sampler.latest, history: sampler.history, networkHistory: sampler.networkHistory)
         popover.contentViewController = controller
         popover.behavior = .transient
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
-        controller.update(sampler.latest, history: sampler.history)
     }
 
     @objc private func metricToggled(_ sender: NSButton) {
@@ -160,60 +163,5 @@ final class MonitorModule: NexoModule {
     @objc private func styleChanged(_ sender: NSPopUpButton) {
         style = MonitorWidgetStyle(rawValue: sender.indexOfSelectedItem) ?? .text
         applySettings()
-    }
-}
-
-/// Popover listing every metric with its detail line and a sparkline of the last samples.
-final class MonitorDetailViewController: NSViewController {
-    private var rows = [Metric: (value: NSTextField, detail: NSTextField, chart: SparklineView)]()
-
-    override func loadView() {
-        let stack = SettingsForm.stack([], spacing: 10)
-        stack.edgeInsets = NSEdgeInsets(top: 14, left: 14, bottom: 14, right: 14)
-        for metric in Metric.allCases {
-            let title = SettingsForm.header(metric.title)
-            let value = NSTextField(labelWithString: "–")
-            value.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-            let detail = SettingsForm.note("")
-            let chart = SparklineView()
-            rows[metric] = (value, detail, chart)
-            let header = NSStackView(views: [title, value])
-            stack.addArrangedSubview(SettingsForm.stack([header, detail, chart], spacing: 4))
-        }
-        view = stack
-    }
-
-    func update(_ sample: MonitorSample, history: [Metric: [Double]]) {
-        for (metric, row) in rows {
-            row.value.stringValue = MonitorWidgetView.value(metric, sample)
-            row.value.textColor = MonitorWidgetView.color(metric, sample)
-            row.detail.stringValue = Self.detail(metric, sample)
-            row.chart.values = history[metric] ?? []
-            row.chart.color = metric == .memory ? MonitorWidgetView.color(.memory, sample) : .controlAccentColor
-        }
-    }
-
-    private static func detail(_ metric: Metric, _ sample: MonitorSample) -> String {
-        switch metric {
-        case .cpu: return "All cores"
-        case .memory:
-            let pressure = "Pressure \(MonitorModule.levelName(sample.pressure.level))"
-            guard let m = sample.memory else { return pressure }
-            return "\(pressure) · Used \(MonitorFormat.bytes(m.used)) of \(MonitorFormat.bytes(m.total)) (app \(MonitorFormat.bytes(m.app)), wired \(MonitorFormat.bytes(m.wired)), compressed \(MonitorFormat.bytes(m.compressed))) · Cached \(MonitorFormat.bytes(m.cached)) · Swap \(MonitorFormat.bytes(m.swapUsed))"
-        case .network:
-            guard let n = sample.network else { return "–" }
-            return "↓ \(MonitorFormat.rate(n.download))  ↑ \(MonitorFormat.rate(n.upload))"
-        case .disk:
-            let free = sample.diskFree.map { "\(MonitorFormat.bytes(UInt64($0.free))) free of \(MonitorFormat.bytes(UInt64($0.total)))" } ?? "–"
-            let io = sample.diskIO.map { " · read \(MonitorFormat.rate($0.read)), write \(MonitorFormat.rate($0.write))" } ?? ""
-            return free + io
-        case .battery:
-            guard let b = sample.battery else { return "No battery" }
-            let state = b.isCharging ? "charging" : b.onAC ? "on power adapter" : "on battery"
-            return "\(state)\(b.cycleCount.map { " · \($0) cycles" } ?? "")"
-        case .temperature:
-            guard let t = sample.temperature else { return "Unavailable" }
-            return String(format: "Average %.0f°C · hottest %.0f°C", t.average, t.maximum)
-        }
     }
 }

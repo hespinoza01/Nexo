@@ -1,11 +1,12 @@
 import Foundation
 
 enum Metric: String, CaseIterable {
-    case cpu, memory, network, disk, battery, temperature
+    case cpu, gpu, memory, network, disk, battery, temperature
 
     var title: String {
         switch self {
         case .cpu: return "CPU"
+        case .gpu: return "GPU"
         case .memory: return "Memory"
         case .network: return "Network"
         case .disk: return "Disk"
@@ -17,6 +18,7 @@ enum Metric: String, CaseIterable {
     var shortLabel: String {
         switch self {
         case .cpu: return "CPU"
+        case .gpu: return "GPU"
         case .memory: return "MEM"
         case .network: return "NET"
         case .disk: return "SSD"
@@ -29,7 +31,9 @@ enum Metric: String, CaseIterable {
 /// One reading of every metric. Optional fields are nil when the source is unavailable or has no
 /// delta yet (first CPU / network / disk sample).
 struct MonitorSample {
-    var cpu: Double?
+    var cpu: Double? { cpuLoad?.total }
+    var cpuLoad: CPULoad?
+    var gpu: GPUStatus?
     var pressure = MemoryPressure(level: .normal, percent: nil)
     var memory: MemoryUsage?
     var network: (download: Double, upload: Double)?
@@ -37,11 +41,13 @@ struct MonitorSample {
     var diskFree: (free: Int64, total: Int64)?
     var battery: BatteryStatus?
     var temperature: (average: Double, maximum: Double)?
+    var localAddress: (interface: String, address: String)?
 
     /// 0–1 value used for bars and history, per metric.
     func fraction(_ metric: Metric) -> Double? {
         switch metric {
         case .cpu: return cpu
+        case .gpu: return gpu?.device
         case .memory: return pressure.percent.map { Double($0) / 100 }
         case .network: return network.map { min(1, ($0.download + $0.upload) / 12_500_000) } // relative to 100 Mbit/s
         case .disk: return diskFree.map { 1 - Double($0.free) / Double(max(1, $0.total)) }
@@ -61,6 +67,8 @@ final class MonitorSampler {
     private var pressureSource: DispatchSourceMemoryPressure?
     private(set) var latest = MonitorSample()
     private(set) var history = [Metric: [Double]]()
+    /// Raw network rates (bytes/s), oldest first, for the popover's upload/download chart.
+    private(set) var networkHistory = [(download: Double, upload: Double)]()
     var enabledMetrics = Set(Metric.allCases)
     var onSample: ((MonitorSample) -> Void)?
 
@@ -87,9 +95,13 @@ final class MonitorSampler {
     private func sample() {
         var sample = MonitorSample()
         sample.pressure = MemoryPressure.read()
-        if enabledMetrics.contains(.cpu) { sample.cpu = cpuReader.read() ?? latest.cpu }
+        if enabledMetrics.contains(.cpu) { sample.cpuLoad = cpuReader.read() ?? latest.cpuLoad }
+        if enabledMetrics.contains(.gpu) { sample.gpu = GPUReader.read() }
         if enabledMetrics.contains(.memory) { sample.memory = MemoryUsage.read() }
-        if enabledMetrics.contains(.network) { sample.network = networkReader.read() ?? latest.network }
+        if enabledMetrics.contains(.network) {
+            sample.network = networkReader.read() ?? latest.network
+            sample.localAddress = NetworkReader.localAddress()
+        }
         if enabledMetrics.contains(.disk) {
             sample.diskIO = diskReader.throughput() ?? latest.diskIO
             sample.diskFree = DiskReader.freeSpace()
@@ -109,6 +121,10 @@ final class MonitorSampler {
             if values.count > Self.historyLength { values.removeFirst(values.count - Self.historyLength) }
             history[metric] = values
         }
+        if let network = sample.network {
+            networkHistory.append(network)
+            if networkHistory.count > Self.historyLength { networkHistory.removeFirst(networkHistory.count - Self.historyLength) }
+        }
     }
 }
 
@@ -126,6 +142,12 @@ enum MonitorFormat {
             unit += 1
         }
         return value < 10 && unit > 0 ? String(format: "%.1f%@/s", value, units[unit]) : "\(Int(value))\(units[unit])/s"
+    }
+
+    /// "28.9 GB": one decimal, short enough for a value column.
+    static func gigabytes(_ value: UInt64) -> String {
+        let gb = Double(value) / 1_073_741_824
+        return gb >= 100 ? String(format: "%.0f GB", gb) : String(format: "%.1f GB", gb)
     }
 
     static func percent(_ fraction: Double) -> String {
