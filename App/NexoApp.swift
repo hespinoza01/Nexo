@@ -34,5 +34,6 @@ enum NexoCore {
     private static func registerModules() {
         registry.register(SwitcherModule())
         registry.register(KeepAwakeModule())
+        registry.register(InputSourceModule())
     }
 }
