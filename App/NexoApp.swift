@@ -17,6 +17,10 @@ enum NexoCore {
     /// The one Nexo status item; the switcher anchors its onboarding popover to it.
     static var nsStatusItem: NSStatusItem? { statusItem?.statusItem }
 
+    static func setStatusIndicator(_ symbol: String?, owner: String) {
+        statusItem?.setIndicator(symbol, owner: owner)
+    }
+
     static func terminate() {
         registry.stopAll()
     }
@@ -29,5 +33,6 @@ enum NexoCore {
     /// Each module sub-plan adds its `registry.register(...)` line here.
     private static func registerModules() {
         registry.register(SwitcherModule())
+        registry.register(KeepAwakeModule())
     }
 }

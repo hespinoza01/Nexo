@@ -3,7 +3,7 @@ import Carbon.HIToolbox.Events
 import ShortcutRecorder
 
 class KeyboardEvents {
-    private static let signature = "altt".utf16.reduce(0) { ($0 << 8) + OSType($1) }
+    fileprivate static let signature = "altt".utf16.reduce(0) { ($0 << 8) + OSType($1) }
     // GetEventMonitorTarget/GetApplicationEventTarget also work, but require Accessibility Permission
     private static let shortcutEventTarget = GetEventDispatcherTarget()
     private static var eventHotKeyRefs = [String: EventHotKeyRef?]()
@@ -260,6 +260,8 @@ class KeyboardEvents {
             InstallEventHandler(shortcutEventTarget, { (_: EventHandlerCallRef?, event: EventRef?, _: UnsafeMutableRawPointer?) -> OSStatus in
                 var id = EventHotKeyID()
                 GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil, MemoryLayout<EventHotKeyID>.size, nil, &id)
+                // Nexo modules register their own Carbon hotkeys on the same target (`GlobalHotKey`).
+                guard id.signature == KeyboardEvents.signature else { return OSStatus(eventNotHandledErr) }
                 let globalId = Int(id.id)
                 handleKeyboardEvent(globalId, .down, nil, nil, false, nil,
                                     KeyboardEvents.claimRecordedRelease(globalId))
@@ -271,6 +273,7 @@ class KeyboardEvents {
             InstallEventHandler(shortcutEventTarget, { (_: EventHandlerCallRef?, event: EventRef?, _: UnsafeMutableRawPointer?) -> OSStatus in
                 var id = EventHotKeyID()
                 GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil, MemoryLayout<EventHotKeyID>.size, nil, &id)
+                guard id.signature == KeyboardEvents.signature else { return OSStatus(eventNotHandledErr) }
                 handleKeyboardEvent(Int(id.id), .up, nil, nil, false)
                 return noErr
             }, eventTypes.count, &eventTypes, nil, &hotKeyReleasedEventHandler)

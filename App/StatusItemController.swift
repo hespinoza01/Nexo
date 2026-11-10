@@ -22,8 +22,19 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         addFooter()
     }
 
+    /// Modules that want to signal a state on the icon (e.g. keep awake active) register an indicator
+    /// symbol; the most recently set one wins, and the default icon returns when none is left.
+    private var indicators = [(owner: String, symbol: String)]()
+
+    func setIndicator(_ symbol: String?, owner: String) {
+        indicators.removeAll { $0.owner == owner }
+        if let symbol { indicators.append((owner, symbol)) }
+        configureButton()
+    }
+
     private func configureButton() {
-        let image = NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: "Nexo")
+        let name = indicators.last?.symbol ?? "square.grid.2x2"
+        let image = NSImage(systemSymbolName: name, accessibilityDescription: "Nexo")
         image?.isTemplate = true
         statusItem.button?.image = image
     }
