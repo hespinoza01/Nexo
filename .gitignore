@@ -1,0 +1,19 @@
+.DS_Store
+*.xcodeproj/
+build/
+DerivedData/
+.build/
+*.xcuserstate
+xcuserdata/
+.swiftpm/
+# signing material
+*.p12
+*.key
+*.crt
+*.conf
+Scripts/.signing/
+# scratch
+_debug.*
+_probe.*
+.scratch.*
+.codegraph/
