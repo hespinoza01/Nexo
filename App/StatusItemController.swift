@@ -2,7 +2,7 @@ import Cocoa
 
 /// The single Nexo status item. Its menu is rebuilt on open from the enabled modules' sections.
 final class StatusItemController: NSObject, NSMenuDelegate {
-    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+    let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
     private let registry: ModuleRegistry
     private let openSettings: (String?) -> Void

@@ -16,7 +16,7 @@ Licencia GPL-3.0 (incorpora AltTab). Créditos en `NOTICE.md`. Solo uso personal
 - `Core/ModuleRegistry.swift`: guarda el estado enabled en `module.<id>.enabled` y lo aplica en runtime.
 - `Core/PermissionCenter.swift`: único lugar para chequear y pedir permisos.
 - `App/StatusItemController.swift`: un solo status item; el menú se reconstruye al abrir con `menuItems()` de cada módulo habilitado.
-- `App/SettingsWindow.swift`: sidebar con General + una página por módulo (`settingsView()`).
+- `App/NexoSettingsWindow.swift`: sidebar con General + una página por módulo (`settingsView()`).
 - Módulos en `Modules/<Nombre>/`; se registran en `NexoApp.registerModules()`.
 
 ## Convenciones (adaptadas de AGENTS.md de AltTab)

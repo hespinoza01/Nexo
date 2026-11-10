@@ -34,6 +34,10 @@ targets:
       - path: Core
       - path: Resources
         optional: true
+      - path: Modules
+        excludes:
+          - "**/*.md"
+          - "**/*.h"
     dependencies:
       - package: ShortcutRecorder
     info:
@@ -44,6 +48,11 @@ targets:
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "1"
         LSUIElement: true
+        NSPrincipalClass: "$(PRODUCT_MODULE_NAME).App"
+        CFBundleIconFile: app.png
+        ATSApplicationFontsPath: ""
+        NSSupportsAutomaticTermination: false
+        NSSupportsSuddenTermination: false
         LSApplicationCategoryType: public.app-category.utilities
         NSHumanReadableCopyright: "GPL-3.0 — includes code from AltTab (lwouis) and others, see NOTICE.md"
         NSAppleEventsUsageDescription: "Nexo uses Automation to read context from other apps."
@@ -58,6 +67,14 @@ targets:
         PRODUCT_NAME: Nexo
         INFOPLIST_FILE: App/Info.plist
         CODE_SIGN_ENTITLEMENTS: App/Nexo.entitlements
+        SWIFT_OBJC_BRIDGING_HEADER: Modules/Switcher/Switcher-Bridging-Header.h
+        # SkyLight (private) backs the switcher's CGS/SLS calls.
+        FRAMEWORK_SEARCH_PATHS: "$(inherited) /System/Library/PrivateFrameworks"
+        OTHER_LDFLAGS: "$(inherited) -framework SkyLight"
+        LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"
+        INFOPLIST_OUTPUT_FORMAT: binary
+        STRINGS_FILE_OUTPUT_ENCODING: UTF-8
+        HEADER_SEARCH_PATHS: "$(SRCROOT)/Modules/Switcher/vendors"
 
   # NexoTests target is added in sub-plan 10/14 (unit tests).
 
