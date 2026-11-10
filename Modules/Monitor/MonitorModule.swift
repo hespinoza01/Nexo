@@ -82,7 +82,7 @@ final class MonitorModule: NexoModule {
             guard let self else { return }
             self.order = order
             self.metrics = order.filter(enabled.contains)
-            self.applySettings()
+            self.refreshWidget()
         }
         let intervalPopUp = NSPopUpButton()
         Self.intervals.forEach { intervalPopUp.addItem(withTitle: "\(Int($0)) s") }
@@ -131,11 +131,16 @@ final class MonitorModule: NexoModule {
     }
 
     private func applySettings() {
+        refreshWidget()
+        sampler.enabledMetrics = Set(Metric.allCases)
+        sampler.start(interval: interval)
+    }
+
+    private func refreshWidget() {
         widget.metrics = metrics
         widget.style = style
         statusItem?.isVisible = !metrics.isEmpty
-        sampler.enabledMetrics = Set(Metric.allCases)
-        sampler.start(interval: interval)
+        statusItem?.length = widget.intrinsicContentSize.width
     }
 
     private func render(_ sample: MonitorSample) {
@@ -187,7 +192,7 @@ final class MetricOrderList: NSScrollView, NSTableViewDataSource, NSTableViewDel
         table.addTableColumn(column)
         table.headerView = nil
         table.rowHeight = 24
-        table.style = .inset
+        table.style = .plain
         table.usesAlternatingRowBackgroundColors = false
         table.dataSource = self
         table.delegate = self
@@ -195,6 +200,7 @@ final class MetricOrderList: NSScrollView, NSTableViewDataSource, NSTableViewDel
         table.draggingDestinationFeedbackStyle = .gap
         documentView = table
         hasVerticalScroller = false
+        verticalScrollElasticity = .none
         borderType = .noBorder
         drawsBackground = false
         translatesAutoresizingMaskIntoConstraints = false
