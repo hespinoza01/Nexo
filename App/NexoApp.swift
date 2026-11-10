@@ -36,5 +36,6 @@ enum NexoCore {
         registry.register(KeepAwakeModule())
         registry.register(InputSourceModule())
         registry.register(MonitorModule())
+        registry.register(SimulatorsModule())
     }
 }
