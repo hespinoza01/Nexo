@@ -499,6 +499,8 @@ class App: NSApplication {
 
 extension App: NSApplicationDelegate {
     func applicationDidFinishLaunching(_ aNotification: Notification) {
+        // Unit tests use the app as their host: start nothing (taps, hotkeys, status items) under XCTest.
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
         App.shared.disableRelaunchOnLogin()
         Logger.initialize()
         MainThreadStall.observe()

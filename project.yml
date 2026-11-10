@@ -76,10 +76,28 @@ targets:
         STRINGS_FILE_OUTPUT_ENCODING: UTF-8
         HEADER_SEARCH_PATHS: "$(SRCROOT)/Modules/Switcher/vendors"
 
-  # NexoTests target is added in sub-plan 10/14 (unit tests).
+  NexoTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: Nexo
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.luckylopolis.nexo.tests
+        # @testable import Nexo re-reads the app's bridging header.
+        HEADER_SEARCH_PATHS: "$(SRCROOT)/Modules/Switcher/vendors"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Nexo.app/Contents/MacOS/Nexo"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        GENERATE_INFOPLIST_FILE: YES
 
 schemes:
   Nexo:
     build:
       targets:
         Nexo: all
+        NexoTests: [test]
+    test:
+      targets:
+        - NexoTests
