@@ -79,6 +79,9 @@ struct MetricStyle: Codable, Equatable {
     var critical = 0.9
     /// Extra width in points, for alignment with neighbours.
     var extraWidth = 0.0
+    /// Space before/after this metric in the menu bar, on top of the global spacing.
+    var paddingLeft = 0.0
+    var paddingRight = 0.0
     var chartHistory = 30
     var networkLayout = NetworkLayout.twoRows
     var arrowStyle = ArrowStyle.arrows
@@ -100,6 +103,8 @@ struct MetricStyle: Codable, Equatable {
         warning = ((try? c.decodeIfPresent(Double.self, forKey: .warning)) ?? nil) ?? d.warning
         critical = ((try? c.decodeIfPresent(Double.self, forKey: .critical)) ?? nil) ?? d.critical
         extraWidth = ((try? c.decodeIfPresent(Double.self, forKey: .extraWidth)) ?? nil) ?? d.extraWidth
+        paddingLeft = ((try? c.decodeIfPresent(Double.self, forKey: .paddingLeft)) ?? nil) ?? d.paddingLeft
+        paddingRight = ((try? c.decodeIfPresent(Double.self, forKey: .paddingRight)) ?? nil) ?? d.paddingRight
         chartHistory = ((try? c.decodeIfPresent(Int.self, forKey: .chartHistory)) ?? nil) ?? d.chartHistory
         networkLayout = ((try? c.decodeIfPresent(NetworkLayout.self, forKey: .networkLayout)) ?? nil) ?? d.networkLayout
         arrowStyle = ((try? c.decodeIfPresent(ArrowStyle.self, forKey: .arrowStyle)) ?? nil) ?? d.arrowStyle
@@ -225,6 +230,8 @@ struct MonitorAppearance: Codable, Equatable {
             var s = style
             s.chartHistory = min(120, max(10, style.chartHistory))
             s.extraWidth = style.extraWidth.finiteClamped(0, 20)
+            s.paddingLeft = style.paddingLeft.finiteClamped(0, 30)
+            s.paddingRight = style.paddingRight.finiteClamped(0, 30)
             s.critical = style.critical.finiteClamped(0.05, 1)
             s.warning = min(style.warning.finiteClamped(0, 1), s.critical)
             if let label = s.label { s.label = String(label.prefix(8)) }

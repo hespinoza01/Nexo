@@ -303,6 +303,21 @@ final class MonitorAppearanceTests: XCTestCase {
         XCTAssertEqual(a.popover.topProcesses, 0)
     }
 
+    func testPerMetricPaddingWidensOnlyThatMetric() {
+        var a = MonitorAppearance()
+        a.update(.network) { $0.enabled = true }
+        a.update(.gpu) { $0.enabled = true }
+        let widget = MonitorWidgetView()
+        widget.config = a
+        let base = widget.intrinsicContentSize.width
+        a.update(.network) { $0.paddingRight = 10 }
+        a.update(.gpu) { $0.paddingLeft = 6 }
+        widget.config = a
+        XCTAssertEqual(widget.intrinsicContentSize.width, base + 16, accuracy: 0.01)
+        a.update(.gpu) { $0.paddingLeft = -5 }
+        XCTAssertEqual(a.sanitized().style(.gpu).paddingLeft, 0)
+    }
+
     func testPresetKeepsAlertsColorsAndLabels() {
         var mine = MonitorAppearance()
         mine.alerts.lowDisk = true

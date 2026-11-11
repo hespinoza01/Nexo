@@ -39,7 +39,9 @@ final class MonitorWidgetView: NSView {
                 x += gap
             }
             let width = width(of: metric)
-            draw(metric, in: NSRect(x: x, y: 0, width: width, height: bounds.height))
+            let style = config.style(metric)
+            let left = CGFloat(style.paddingLeft)
+            draw(metric, in: NSRect(x: x + left, y: 0, width: width - left - CGFloat(style.paddingRight), height: bounds.height))
             x += width
         }
     }
@@ -66,8 +68,13 @@ final class MonitorWidgetView: NSView {
 
     // MARK: Layout
 
+    /// Outer width: the metric's padding plus its content.
     private func width(of metric: Metric) -> CGFloat {
         let style = config.style(metric)
+        return CGFloat(style.paddingLeft + style.paddingRight) + contentWidth(metric, style)
+    }
+
+    private func contentWidth(_ metric: Metric, _ style: MetricStyle) -> CGFloat {
         let extra = CGFloat(max(0, style.extraWidth))
         if metric == .network { return networkWidth(style) + extra }
         let verticalLabel = style.showLabel ? 8 : 0 as CGFloat

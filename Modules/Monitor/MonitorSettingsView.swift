@@ -159,6 +159,8 @@ struct MonitorSettingsView: View {
                     slider("Critical at", styleBinding(metric, \.critical), 0.4...1, step: 0.05, format: "%.0f%%", scale: 100)
                 }
             }
+            slider("Space left", styleBinding(metric, \.paddingLeft), 0...30, step: 1, format: "%.0f pt")
+            slider("Space right", styleBinding(metric, \.paddingRight), 0...30, step: 1, format: "%.0f pt")
             slider("Extra width", styleBinding(metric, \.extraWidth), 0...20, step: 1, format: "%.0f pt")
         }
     }
