@@ -365,7 +365,7 @@ final class MonitorAppearanceStore: ObservableObject {
         if let data = defaults.data(forKey: Self.key), let stored = try? JSONDecoder().decode(MonitorAppearance.self, from: data) {
             appearance = stored
         } else {
-            appearance = Self.migrated(defaults)
+            appearance = Self.migrated(defaults).sanitized()
         }
     }
 
