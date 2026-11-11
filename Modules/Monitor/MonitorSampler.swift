@@ -59,7 +59,7 @@ struct MonitorSample {
 
 /// Polls the readers on a timer and reacts immediately to kernel memory-pressure transitions.
 final class MonitorSampler {
-    static let historyLength = 60
+    static let historyLength = 120
     private let cpuReader = CPUReader()
     private let networkReader = NetworkReader()
     private let diskReader = DiskReader()
@@ -155,6 +155,13 @@ enum MonitorFormat {
     static func gigabytes(_ value: UInt64) -> String {
         let gb = Double(value) / 1_073_741_824
         return gb >= 100 ? String(format: "%.0f GB", gb) : String(format: "%.1f GB", gb)
+    }
+
+    /// "30.5 / 48 GB".
+    static func usedOfTotal(_ used: UInt64, _ total: UInt64) -> String {
+        let gb = { (value: UInt64) in Double(value) / 1_073_741_824 }
+        let totalText = gb(total).rounded() == gb(total) ? String(format: "%.0f", gb(total)) : String(format: "%.1f", gb(total))
+        return String(format: "%.1f / %@ GB", gb(used), totalText)
     }
 
     static func percent(_ fraction: Double) -> String {

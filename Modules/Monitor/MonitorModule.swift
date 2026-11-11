@@ -1,66 +1,63 @@
 import Cocoa
+import ShortcutRecorder
+import Combine
+import SwiftUI
 
 /// System monitor in its own status item (Stats-like readouts), with a detail popover and history.
 /// Memory is shown as the kernel's memory pressure, like Activity Monitor; occupancy is listed apart.
+/// Everything visual is configurable through `MonitorAppearance` (see `MonitorSettingsView`).
 final class MonitorModule: NexoModule {
     static let id = "monitor"
     let title = "System Monitor"
     let icon = "gauge.with.dots.needle.33percent"
     private(set) var isRunning = false
 
-    private enum Key {
-        static let metrics = "monitor.metrics"
-        static let order = "monitor.order"
+    enum Key {
         static let interval = "monitor.interval"
-        static let style = "monitor.style"
+        static let shortcut = "monitor.shortcut"
     }
 
-    private static let intervals: [TimeInterval] = [1, 2, 3, 5]
+    static let intervals: [TimeInterval] = [1, 2, 3, 5]
+    let store = MonitorAppearanceStore()
+    let live = MonitorLiveModel()
     private let sampler = MonitorSampler()
+    private let alerter = MonitorAlerter()
     private var statusItem: NSStatusItem?
     private let widget = MonitorWidgetView()
     private let popover = NSPopover()
     private var detail: MonitorDetailViewController?
+    private var observation: AnyCancellable?
+    private lazy var hotKey = GlobalHotKey { [weak self] in self?.togglePopover() }
 
-    /// Metrics shown in the menu bar, in the user's order.
-    private var metrics: [Metric] {
-        get {
-            let stored = UserDefaults.standard.stringArray(forKey: Key.metrics) ?? [Metric.cpu, .memory].map(\.rawValue)
-            return order.filter { stored.contains($0.rawValue) }
-        }
-        set { UserDefaults.standard.set(newValue.map(\.rawValue), forKey: Key.metrics) }
-    }
-
-    /// Every metric in the user's order (menu bar and popover); metrics added in later versions go last.
-    private var order: [Metric] {
-        get {
-            let stored = (UserDefaults.standard.stringArray(forKey: Key.order) ?? []).compactMap(Metric.init(rawValue:))
-            return stored + Metric.allCases.filter { !stored.contains($0) }
-        }
-        set { UserDefaults.standard.set(newValue.map(\.rawValue), forKey: Key.order) }
-    }
-
-    private var interval: TimeInterval {
+    var interval: TimeInterval {
         get { Self.intervals.contains(UserDefaults.standard.double(forKey: Key.interval)) ? UserDefaults.standard.double(forKey: Key.interval) : 2 }
-        set { UserDefaults.standard.set(newValue, forKey: Key.interval) }
-    }
-
-    private var style: MonitorWidgetStyle {
-        get { MonitorWidgetStyle(rawValue: UserDefaults.standard.integer(forKey: Key.style)) ?? .text }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: Key.style) }
+        set {
+            UserDefaults.standard.set(newValue, forKey: Key.interval)
+            if isRunning { sampler.start(interval: newValue) }
+        }
     }
 
     func start() {
+        guard !isRunning else { return }
         isRunning = true
         installStatusItem()
         sampler.onSample = { [weak self] sample in self?.render(sample) }
-        applySettings()
+        observation = store.$appearance.dropFirst().sink { [weak self] appearance in
+            DispatchQueue.main.async { self?.refreshWidget(appearance) }
+        }
+        refreshWidget(store.appearance)
+        sampler.start(interval: interval)
+        hotKey.register(ShortcutStore.load(Key.shortcut))
+        alerter.requestAuthorizationIfNeeded(store.appearance.alerts)
     }
 
     func stop() {
         isRunning = false
         sampler.stop()
+        hotKey.unregister()
+        observation = nil
         popover.close()
+        detail = nil
         if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
         statusItem = nil
     }
@@ -77,31 +74,17 @@ final class MonitorModule: NexoModule {
     }
 
     func settingsView() -> NSView {
-        let list = MetricOrderList(order: order, enabled: Set(metrics))
-        list.onChange = { [weak self] order, enabled in
-            guard let self else { return }
-            self.order = order
-            self.metrics = order.filter(enabled.contains)
-            self.refreshWidget()
-        }
-        let intervalPopUp = NSPopUpButton()
-        Self.intervals.forEach { intervalPopUp.addItem(withTitle: "\(Int($0)) s") }
-        intervalPopUp.selectItem(at: Self.intervals.firstIndex(of: interval) ?? 1)
-        intervalPopUp.target = self
-        intervalPopUp.action = #selector(intervalChanged(_:))
-        let stylePopUp = NSPopUpButton()
-        MonitorWidgetStyle.allCases.forEach { stylePopUp.addItem(withTitle: $0.title) }
-        stylePopUp.selectItem(at: style.rawValue)
-        stylePopUp.target = self
-        stylePopUp.action = #selector(styleChanged(_:))
-        return SettingsForm.stack([
-            SettingsForm.header("Shown in the menu bar"),
-            list,
-            SettingsForm.note("Drag to reorder. The order applies to the menu bar and to the detail popover."),
-            SettingsForm.row("Update every", intervalPopUp),
-            SettingsForm.row("Widget style", stylePopUp),
-            SettingsForm.note("Memory shows the kernel's memory pressure, the same value and color as Activity Monitor (green normal, yellow warning, red critical). Used/wired/compressed memory is in the detail popover. Temperatures use a private macOS API and may be missing on some versions."),
-        ])
+        live.seed(sampler.latest, history: sampler.history)
+        let view = MonitorSettingsView(store: store, live: live, module: self)
+        let hosting = NSHostingView(rootView: view)
+        hosting.translatesAutoresizingMaskIntoConstraints = false
+        hosting.widthAnchor.constraint(greaterThanOrEqualToConstant: 520).isActive = true
+        return hosting
+    }
+
+    func registerShortcut(_ shortcut: Shortcut?) {
+        guard isRunning else { return }
+        hotKey.register(shortcut)
     }
 
     static func levelName(_ level: MemoryPressure.Level) -> String {
@@ -126,127 +109,71 @@ final class MonitorModule: NexoModule {
             widget.bottomAnchor.constraint(equalTo: button.bottomAnchor),
         ])
         button.target = self
-        button.action = #selector(togglePopover(_:))
+        button.action = #selector(statusItemClicked)
         statusItem = item
     }
 
-    private func applySettings() {
-        refreshWidget()
-        sampler.enabledMetrics = Set(Metric.allCases)
-        sampler.start(interval: interval)
-    }
-
-    private func refreshWidget() {
-        widget.metrics = metrics
-        widget.style = style
-        statusItem?.isVisible = !metrics.isEmpty
+    private func refreshWidget(_ appearance: MonitorAppearance) {
+        widget.config = appearance
+        statusItem?.isVisible = !appearance.menuBarMetrics.isEmpty
         statusItem?.length = widget.intrinsicContentSize.width
+        alerter.requestAuthorizationIfNeeded(appearance.alerts)
     }
 
     private func render(_ sample: MonitorSample) {
+        widget.history = sampler.history
         widget.sample = sample
         statusItem?.length = widget.intrinsicContentSize.width
-        guard popover.isShown else { return }
-        detail?.update(sample, history: sampler.history, networkHistory: sampler.networkHistory)
+        alerter.evaluate(sample, store.appearance.alerts)
+        live.publish(sample, history: sampler.history)
+        guard popover.isShown, let detail else { return }
+        detail.update(sample, history: sampler.history, networkHistory: sampler.networkHistory)
+        TopProcessesReader.read(limit: processLimit) { [weak detail] in detail?.update(processes: $0) }
     }
 
-    @objc private func togglePopover(_ sender: NSStatusBarButton) {
+    /// No `ps` at all when neither section that lists processes is visible.
+    private var processLimit: Int {
+        let a = store.appearance
+        return a.isSectionVisible(.cpu) || a.isSectionVisible(.memory) ? a.popover.topProcesses : 0
+    }
+
+    @objc private func statusItemClicked() {
+        togglePopover()
+    }
+
+    private func togglePopover() {
         guard !popover.isShown else {
             popover.close()
             detail = nil
             return
         }
-        let controller = MonitorDetailViewController(order: order)
+        // Hidden item (no metric enabled): the button has no window to anchor the popover to.
+        guard statusItem?.isVisible == true, let button = statusItem?.button, button.window != nil else { return }
+        let controller = MonitorDetailViewController(config: store.appearance)
         detail = controller
         _ = controller.view
         controller.update(sampler.latest, history: sampler.history, networkHistory: sampler.networkHistory)
+        TopProcessesReader.read(limit: processLimit) { [weak controller] in controller?.update(processes: $0) }
         popover.contentViewController = controller
         popover.behavior = .transient
-        popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
-    }
-
-    @objc private func intervalChanged(_ sender: NSPopUpButton) {
-        interval = Self.intervals[sender.indexOfSelectedItem]
-        applySettings()
-    }
-
-    @objc private func styleChanged(_ sender: NSPopUpButton) {
-        style = MonitorWidgetStyle(rawValue: sender.indexOfSelectedItem) ?? .text
-        applySettings()
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
 
-/// Metric list for settings: checkbox to show it in the menu bar, drag to reorder.
-final class MetricOrderList: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
-    private static let dragType = NSPasteboard.PasteboardType("com.luckylopolis.nexo.monitor.metric")
-    private let table = NSTableView()
-    private var order: [Metric]
-    private var enabled: Set<Metric>
-    var onChange: (([Metric], Set<Metric>) -> Void)?
+/// Latest sample for the settings preview; published only while the preview is on screen.
+final class MonitorLiveModel: ObservableObject {
+    static var previewVisible = false
+    @Published private(set) var sample = MonitorSample()
+    @Published private(set) var history = [Metric: [Double]]()
 
-    init(order: [Metric], enabled: Set<Metric>) {
-        self.order = order
-        self.enabled = enabled
-        super.init(frame: NSRect(x: 0, y: 0, width: 260, height: 0))
-        let column = NSTableColumn(identifier: .init("metric"))
-        table.addTableColumn(column)
-        table.headerView = nil
-        table.rowHeight = 24
-        table.style = .plain
-        table.usesAlternatingRowBackgroundColors = false
-        table.dataSource = self
-        table.delegate = self
-        table.registerForDraggedTypes([Self.dragType])
-        table.draggingDestinationFeedbackStyle = .gap
-        documentView = table
-        hasVerticalScroller = false
-        verticalScrollElasticity = .none
-        borderType = .noBorder
-        drawsBackground = false
-        translatesAutoresizingMaskIntoConstraints = false
-        widthAnchor.constraint(equalToConstant: 260).isActive = true
-        heightAnchor.constraint(equalToConstant: CGFloat(order.count) * (table.rowHeight + table.intercellSpacing.height) + 12).isActive = true
+    func publish(_ sample: MonitorSample, history: [Metric: [Double]]) {
+        guard Self.previewVisible else { return }
+        seed(sample, history: history)
     }
 
-    required init?(coder: NSCoder) { fatalError("programmatic only") }
-
-    func numberOfRows(in tableView: NSTableView) -> Int { order.count }
-
-    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        let metric = order[row]
-        let box = NSButton(checkboxWithTitle: metric.title, target: self, action: #selector(toggled(_:)))
-        box.identifier = .init(metric.rawValue)
-        box.state = enabled.contains(metric) ? .on : .off
-        let handle = NSImageView(image: NSImage(systemSymbolName: "line.3.horizontal", accessibilityDescription: "Drag to reorder")!)
-        handle.contentTintColor = .tertiaryLabelColor
-        let row = NSStackView(views: [box, NSView(), handle])
-        row.edgeInsets = NSEdgeInsets(top: 0, left: 4, bottom: 0, right: 6)
-        return row
-    }
-
-    func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
-        let item = NSPasteboardItem()
-        item.setString(String(row), forType: Self.dragType)
-        return item
-    }
-
-    func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
-        dropOperation == .above ? .move : []
-    }
-
-    func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
-        guard let raw = info.draggingPasteboard.pasteboardItems?.first?.string(forType: Self.dragType),
-              let from = Int(raw), order.indices.contains(from) else { return false }
-        let metric = order.remove(at: from)
-        order.insert(metric, at: from < row ? row - 1 : row)
-        tableView.reloadData()
-        onChange?(order, enabled)
-        return true
-    }
-
-    @objc private func toggled(_ sender: NSButton) {
-        guard let raw = sender.identifier?.rawValue, let metric = Metric(rawValue: raw) else { return }
-        if sender.state == .on { enabled.insert(metric) } else { enabled.remove(metric) }
-        onChange?(order, enabled)
+    func seed(_ sample: MonitorSample, history: [Metric: [Double]]) {
+        self.sample = sample
+        self.history = history
     }
 }

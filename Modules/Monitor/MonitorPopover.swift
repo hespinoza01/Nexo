@@ -1,25 +1,20 @@
-import Cocoa
-
 /// Stats-style combined popover: one section per metric with a ring gauge, a label/value table and,
-/// where it helps, a chart (per-core bars, network up/down, short history). Fixed width so long
-/// values truncate instead of stretching or clipping the popover.
+/// where it helps, a chart (per-core bars, network up/down, short history) and the top processes.
+/// Width, density, colors, visible sections and order come from `MonitorAppearance`.
 final class MonitorDetailViewController: NSViewController {
-    static let width: CGFloat = 300
-    private static let efficiencyColor = NSColor.systemTeal
-    private static let performanceColor = NSColor.systemIndigo
-    private static let uploadColor = NSColor.systemRed
-    private static let downloadColor = NSColor.systemBlue
-
-    private let order: [Metric]
+    private let config: MonitorAppearance
+    private var style: PopoverStyle { config.popover }
     private var sections = [Metric: MonitorSection]()
     private let cpuRing = RingGaugeView()
     private let cpuTable = InfoTable()
     private let coreBars = CoreBarsView()
+    private let cpuProcesses = InfoTable()
     private let gpuRing = RingGaugeView()
     private let gpuTable = InfoTable()
     private let memoryRing = RingGaugeView()
     private let memoryTable = InfoTable()
     private let memoryChart = SparklineView()
+    private let memoryProcesses = InfoTable()
     private let networkTable = InfoTable()
     private let networkChart = RateChartView()
     private let addressTable = InfoTable()
@@ -27,41 +22,57 @@ final class MonitorDetailViewController: NSViewController {
     private let diskTable = InfoTable()
     private let batteryRing = RingGaugeView()
     private let batteryTable = InfoTable()
+    private let temperatureTable = InfoTable()
+    private let temperatureChart = SparklineView()
 
-    init(order: [Metric] = Metric.allCases) {
-        self.order = order
+    init(config: MonitorAppearance) {
+        self.config = config
         super.init(nibName: nil, bundle: nil)
     }
 
     required init?(coder: NSCoder) { fatalError("programmatic only") }
 
+    private func color(_ hex: String, _ fallback: NSColor) -> NSColor { NSColor(hex: hex) ?? fallback }
+
     override func loadView() {
+        let density = style.density
+        for table in [cpuTable, cpuProcesses, gpuTable, memoryTable, memoryProcesses, networkTable, addressTable, diskTable, batteryTable, temperatureTable] {
+            table.rowSpacing = density.rowSpacing
+        }
         let title = NSTextField(labelWithString: "System Monitor")
         title.font = .systemFont(ofSize: 14, weight: .semibold)
         let settings = NSButton(image: NSImage(systemSymbolName: "gearshape", accessibilityDescription: "Settings")!,
             target: self, action: #selector(openSettings))
         settings.isBordered = false
         settings.contentTintColor = .secondaryLabelColor
-        let header = NSStackView(views: [title, NSView(), settings])
-        header.distribution = .fill
+        let activity = NSButton(image: NSImage(systemSymbolName: "waveform.path.ecg", accessibilityDescription: "Open Activity Monitor")!,
+            target: self, action: #selector(openActivityMonitor))
+        activity.isBordered = false
+        activity.contentTintColor = .secondaryLabelColor
+        activity.toolTip = "Open Activity Monitor"
+        let header = NSStackView(views: [title, NSView(), activity, settings])
 
-        sections[.cpu] = MonitorSection("CPU", [Self.ringRow(cpuRing, cpuTable), coreBars])
-        sections[.gpu] = MonitorSection("GPU", [Self.ringRow(gpuRing, gpuTable)])
-        sections[.memory] = MonitorSection("Memory", [Self.ringRow(memoryRing, memoryTable), memoryChart])
-        sections[.network] = MonitorSection("Network", [Self.chartRow(networkTable, networkChart), addressTable])
-        sections[.disk] = MonitorSection("Disk", [Self.ringRow(diskRing, diskTable)])
-        sections[.battery] = MonitorSection("Battery", [Self.ringRow(batteryRing, batteryTable)])
+        let charts = style.showCharts
+        sections[.cpu] = MonitorSection("CPU", [ringRow(cpuRing, cpuTable)] + (style.showCoreBars ? [coreBars] : []) + [cpuProcesses], density: density)
+        sections[.gpu] = MonitorSection("GPU", [ringRow(gpuRing, gpuTable)], density: density)
+        sections[.memory] = MonitorSection("Memory", [ringRow(memoryRing, memoryTable)] + (charts ? [memoryChart] : []) + [memoryProcesses], density: density)
+        sections[.network] = MonitorSection("Network", charts ? [chartRow(networkTable, networkChart), addressTable] : [networkTable, addressTable], density: density)
+        sections[.disk] = MonitorSection("Disk", [ringRow(diskRing, diskTable)], density: density)
+        sections[.battery] = MonitorSection("Battery", [ringRow(batteryRing, batteryTable)], density: density)
+        sections[.temperature] = MonitorSection("Temperature", [temperatureTable] + (charts ? [temperatureChart] : []), density: density)
 
-        let stack = NSStackView(views: [header] + order.compactMap { sections[$0] })
+        let visible = config.orderedMetrics.filter(config.isSectionVisible).compactMap { sections[$0] }
+        let stack = NSStackView(views: [header] + visible)
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 6
-        stack.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        stack.spacing = density.sectionSpacing
+        let inset = density.padding + 2
+        stack.edgeInsets = NSEdgeInsets(top: inset, left: inset, bottom: inset, right: inset)
         stack.translatesAutoresizingMaskIntoConstraints = false
         for view in stack.arrangedSubviews {
-            view.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24).isActive = true
+            view.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -2 * inset).isActive = true
         }
-        stack.widthAnchor.constraint(equalToConstant: Self.width).isActive = true
+        stack.widthAnchor.constraint(equalToConstant: CGFloat(style.width.clamped(260, 420))).isActive = true
         view = stack
     }
 
@@ -72,38 +83,48 @@ final class MonitorDetailViewController: NSViewController {
         updateNetwork(sample, history: networkHistory)
         updateDisk(sample)
         updateBattery(sample)
+        updateTemperature(sample, history: history[.temperature] ?? [])
+    }
+
+    func update(processes: TopProcesses) {
+        cpuProcesses.isHidden = processes.byCPU.isEmpty
+        cpuProcesses.rows = processes.byCPU.map { .init($0.name, String(format: "%.1f%%", $0.cpu)) }
+        memoryProcesses.isHidden = processes.byMemory.isEmpty
+        memoryProcesses.rows = processes.byMemory.map { .init($0.name, MonitorFormat.bytes($0.memory)) }
     }
 
     private func updateCPU(_ sample: MonitorSample) {
+        let ring = config.color(.cpu, sample)
         guard let load = sample.cpuLoad else {
-            cpuRing.set(nil, color: .controlAccentColor)
+            cpuRing.set(nil, color: ring)
             return
         }
-        cpuRing.set(load.total, color: MonitorWidgetView.color(.cpu, sample) == .labelColor ? .controlAccentColor : MonitorWidgetView.color(.cpu, sample))
+        cpuRing.set(load.total, color: ring)
         let efficiency = min(CPUTopology.efficiencyCores, load.perCore.count)
+        let eColor = color(style.efficiencyColor, .systemTeal)
+        let pColor = color(style.performanceColor, .systemIndigo)
         var rows: [InfoTable.Row] = [
             .init("Usage", MonitorFormat.percent(load.total)),
-            .init("System", MonitorFormat.percent(load.system)),
-            .init("User", MonitorFormat.percent(load.user)),
+            .init("System", MonitorFormat.percent(load.system), dot: color(style.systemColor, .systemRed)),
+            .init("User", MonitorFormat.percent(load.user), dot: color(style.userColor, .systemBlue)),
             .init("Idle", MonitorFormat.percent(load.idle)),
         ]
         if efficiency > 0, efficiency < load.perCore.count {
             let average = { (cores: ArraySlice<Double>) in cores.reduce(0, +) / Double(max(1, cores.count)) }
-            rows.append(.init("E-cores", MonitorFormat.percent(average(load.perCore[..<efficiency])), dot: Self.efficiencyColor))
-            rows.append(.init("P-cores", MonitorFormat.percent(average(load.perCore[efficiency...])), dot: Self.performanceColor))
+            rows.append(.init("E-cores", MonitorFormat.percent(average(load.perCore[..<efficiency])), dot: eColor))
+            rows.append(.init("P-cores", MonitorFormat.percent(average(load.perCore[efficiency...])), dot: pColor))
         }
-        if let temperature = sample.temperature {
-            let color = MonitorWidgetView.color(.temperature, sample)
-            rows.append(.init("Temperature", String(format: "%.0f °C", temperature.maximum), valueColor: color == .labelColor ? nil : color))
+        if let temperature = sample.temperature, !config.isSectionVisible(.temperature) {
+            rows.append(.init("Temperature", String(format: "%.0f °C", temperature.maximum), valueColor: Self.alertTint(config.color(.temperature, sample))))
         }
         cpuTable.rows = rows
-        coreBars.set(load.perCore, efficiencyCores: efficiency, efficiencyColor: Self.efficiencyColor, performanceColor: Self.performanceColor)
+        coreBars.set(load.perCore, efficiencyCores: efficiency, efficiencyColor: eColor, performanceColor: pColor)
     }
 
     private func updateGPU(_ sample: MonitorSample) {
         sections[.gpu]?.isHidden = sample.gpu == nil
         guard let gpu = sample.gpu else { return }
-        gpuRing.set(gpu.device, color: .systemBlue)
+        gpuRing.set(gpu.device, color: config.color(.gpu, sample))
         gpuTable.rows = [
             .init("Usage", MonitorFormat.percent(gpu.device)),
             gpu.renderer.map { .init("Renderer", MonitorFormat.percent($0)) },
@@ -111,33 +132,36 @@ final class MonitorDetailViewController: NSViewController {
         ].compactMap { $0 }
     }
 
-    /// The ring and its color are the kernel's memory pressure (what Activity Monitor graphs);
-    /// occupancy is listed below it, never used for the color.
+    /// The ring follows the kernel's memory pressure (what Activity Monitor graphs); occupancy is
+    /// listed below it.
     private func updateMemory(_ sample: MonitorSample, history: [Double]) {
-        let color = MonitorWidgetView.color(.memory, sample)
-        memoryRing.set(sample.pressure.percent.map { Double($0) / 100 }, color: color)
-        var rows: [InfoTable.Row] = [.init("Pressure", MonitorModule.levelName(sample.pressure.level), valueColor: color)]
+        let ring = config.color(.memory, sample)
+        let level = MonitorWidgetView.color(.memory, sample)
+        memoryRing.set(sample.pressure.percent.map { Double($0) / 100 }, color: ring)
+        var rows: [InfoTable.Row] = [.init("Pressure", MonitorModule.levelName(sample.pressure.level), valueColor: level)]
         if let m = sample.memory {
             rows += [
-                .init("Used", "\(MonitorFormat.gigabytes(m.used)) / \(MonitorFormat.gigabytes(m.total))"),
-                .init("App", MonitorFormat.bytes(m.app), dot: .systemBlue),
-                .init("Wired", MonitorFormat.bytes(m.wired), dot: .systemOrange),
-                .init("Compressed", MonitorFormat.bytes(m.compressed), dot: .systemPink),
+                .init("Used", MonitorFormat.usedOfTotal(m.used, m.total)),
+                .init("App", MonitorFormat.bytes(m.app), dot: color(style.appColor, .systemBlue)),
+                .init("Wired", MonitorFormat.bytes(m.wired), dot: color(style.wiredColor, .systemOrange)),
+                .init("Compressed", MonitorFormat.bytes(m.compressed), dot: color(style.compressedColor, .systemPink)),
                 .init("Cached", MonitorFormat.bytes(m.cached)),
                 .init("Swap", MonitorFormat.bytes(m.swapUsed)),
             ]
         }
         memoryTable.rows = rows
         memoryChart.values = history
-        memoryChart.color = color
+        memoryChart.color = ring
     }
 
     private func updateNetwork(_ sample: MonitorSample, history: [(download: Double, upload: Double)]) {
+        let up = color(style.uploadColor, .systemRed)
+        let down = color(style.downloadColor, .systemBlue)
         networkTable.rows = [
-            .init("Upload", sample.network.map { MonitorFormat.rate($0.upload) } ?? "–", dot: Self.uploadColor),
-            .init("Download", sample.network.map { MonitorFormat.rate($0.download) } ?? "–", dot: Self.downloadColor),
+            .init("Upload", sample.network.map { MonitorFormat.rate($0.upload) } ?? "–", dot: up),
+            .init("Download", sample.network.map { MonitorFormat.rate($0.download) } ?? "–", dot: down),
         ]
-        networkChart.set(history, uploadColor: Self.uploadColor, downloadColor: Self.downloadColor)
+        networkChart.set(history, uploadColor: up, downloadColor: down)
         addressTable.rows = [
             .init("Local IP", sample.localAddress.map { "\($0.address) (\($0.interface))" } ?? "Offline"),
         ]
@@ -147,7 +171,7 @@ final class MonitorDetailViewController: NSViewController {
         sections[.disk]?.isHidden = sample.diskFree == nil
         guard let space = sample.diskFree else { return }
         let used = 1 - Double(space.free) / Double(max(1, space.total))
-        diskRing.set(used, color: used > 0.9 ? .systemRed : .systemPurple)
+        diskRing.set(used, color: config.color(.disk, sample))
         diskTable.rows = [
             .init("Free", MonitorFormat.bytes(UInt64(space.free))),
             .init("Total", MonitorFormat.bytes(UInt64(space.total))),
@@ -159,12 +183,28 @@ final class MonitorDetailViewController: NSViewController {
     private func updateBattery(_ sample: MonitorSample) {
         sections[.battery]?.isHidden = sample.battery == nil
         guard let battery = sample.battery else { return }
-        let low = battery.percent <= 15 && !battery.onAC
-        batteryRing.set(Double(battery.percent) / 100, color: low ? .systemRed : .systemGreen)
+        batteryRing.set(Double(battery.percent) / 100, color: config.color(.battery, sample))
         batteryTable.rows = [
             .init("State", battery.isCharging ? "Charging" : battery.onAC ? "Power adapter" : "On battery"),
             battery.cycleCount.map { .init("Cycles", "\($0)") },
         ].compactMap { $0 }
+    }
+
+    private func updateTemperature(_ sample: MonitorSample, history: [Double]) {
+        sections[.temperature]?.isHidden = sample.temperature == nil
+        guard let temperature = sample.temperature else { return }
+        let tint = config.color(.temperature, sample)
+        temperatureTable.rows = [
+            .init("Average", String(format: "%.0f °C", temperature.average)),
+            .init("Hottest", String(format: "%.0f °C", temperature.maximum), valueColor: Self.alertTint(tint)),
+        ]
+        temperatureChart.values = history
+        temperatureChart.color = tint
+    }
+
+    /// Values stay in the label color unless the metric is in a warning state.
+    private static func alertTint(_ color: NSColor) -> NSColor? {
+        [NSColor.systemOrange, .systemRed, .systemYellow].contains(color) ? color : nil
     }
 
     @objc private func openSettings() {
@@ -172,14 +212,21 @@ final class MonitorDetailViewController: NSViewController {
         NexoCore.showSettings(moduleId: MonitorModule.id)
     }
 
-    private static func ringRow(_ ring: RingGaugeView, _ table: InfoTable) -> NSView {
+    @objc private func openActivityMonitor() {
+        view.window?.performClose(nil)
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.ActivityMonitor") {
+            NSWorkspace.shared.openApplication(at: url, configuration: .init())
+        }
+    }
+
+    private func ringRow(_ ring: RingGaugeView, _ table: InfoTable) -> NSView {
         let row = NSStackView(views: [ring, table])
         row.alignment = .centerY
         row.spacing = 12
         return row
     }
 
-    private static func chartRow(_ table: InfoTable, _ chart: NSView) -> NSView {
+    private func chartRow(_ table: InfoTable, _ chart: NSView) -> NSView {
         let row = NSStackView(views: [table, chart])
         row.alignment = .centerY
         row.spacing = 10
@@ -190,7 +237,7 @@ final class MonitorDetailViewController: NSViewController {
 
 /// A rounded card with a section title and its content views stacked full width.
 final class MonitorSection: NSView {
-    init(_ title: String, _ content: [NSView]) {
+    init(_ title: String, _ content: [NSView], density: PopoverDensity = .regular) {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 10
@@ -200,14 +247,14 @@ final class MonitorSection: NSView {
         let stack = NSStackView(views: [label] + content)
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 6
+        stack.spacing = density.rowSpacing * 2 + 4
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 8),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: density.padding),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -density.padding),
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: density.padding - 2),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -(density.padding - 2)),
         ])
         for view in content {
             view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -243,6 +290,10 @@ final class InfoTable: NSView {
     private var dots = [ColorDotView]()
 
     var rows = [Row]() { didSet { render() } }
+    var rowSpacing: CGFloat {
+        get { grid.rowSpacing }
+        set { grid.rowSpacing = newValue }
+    }
 
     init() {
         super.init(frame: .zero)

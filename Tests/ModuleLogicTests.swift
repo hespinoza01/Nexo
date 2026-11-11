@@ -259,3 +259,161 @@ final class ThemeTests: XCTestCase {
         XCTAssertNil(NSColor(hex: nil))
     }
 }
+
+final class MonitorAppearanceTests: XCTestCase {
+    func testOldOrPartialJSONDecodesWithDefaults() throws {
+        let json = #"{"spacing": 6, "styles": {"cpu": {"enabled": true, "label": "PROC"}}}"#
+        let appearance = try JSONDecoder().decode(MonitorAppearance.self, from: Data(json.utf8))
+        XCTAssertEqual(appearance.spacing, 6)
+        XCTAssertEqual(appearance.label(.cpu), "PROC")
+        XCTAssertEqual(appearance.style(.cpu).kind, .text)
+        XCTAssertEqual(appearance.popover.width, 300)
+        XCTAssertEqual(appearance.orderedMetrics, Metric.allCases)
+    }
+
+    func testOrderKeepsUnknownIdsOutAndAppendsNewMetrics() {
+        var appearance = MonitorAppearance()
+        appearance.order = ["memory", "bogus", "cpu"]
+        XCTAssertEqual(Array(appearance.orderedMetrics.prefix(2)), [.memory, .cpu])
+        XCTAssertEqual(appearance.orderedMetrics.count, Metric.allCases.count)
+    }
+
+    func testPresetsRoundTripThroughStore() throws {
+        let defaults = UserDefaults(suiteName: "nexo.tests.monitorAppearance")!
+        defaults.removePersistentDomain(forName: "nexo.tests.monitorAppearance")
+        let store = MonitorAppearanceStore(defaults: defaults)
+        store.appearance = .graphs
+        let exported = try store.export()
+        XCTAssertEqual(MonitorAppearanceStore(defaults: defaults).appearance, .graphs, "persisted")
+        store.appearance = .minimal
+        try store.importData(exported)
+        XCTAssertEqual(store.appearance, .graphs)
+    }
+
+    func testInvalidImportIsSanitizedNotFatal() throws {
+        let json = #"{"order": ["cpu", "cpu", "nope", "memory"], "spacing": -50, "styles": {"cpu": {"chartHistory": -1, "warning": 2, "critical": 0.5, "kind": "hologram", "extraWidth": 1e9}}, "popover": {"topProcesses": -3}}"#
+        let a = try JSONDecoder().decode(MonitorAppearance.self, from: Data(json.utf8))
+        XCTAssertEqual(Array(a.orderedMetrics.prefix(2)), [.cpu, .memory])
+        XCTAssertEqual(Set(a.orderedMetrics).count, a.orderedMetrics.count, "no duplicates")
+        XCTAssertEqual(a.spacing, 0)
+        XCTAssertEqual(a.style(.cpu).chartHistory, 10)
+        XCTAssertEqual(a.style(.cpu).kind, .text, "unknown enum falls back instead of failing the whole decode")
+        XCTAssertLessThanOrEqual(a.style(.cpu).warning, a.style(.cpu).critical)
+        XCTAssertEqual(a.style(.cpu).extraWidth, 20)
+        XCTAssertEqual(a.popover.topProcesses, 0)
+    }
+
+    func testPresetKeepsAlertsColorsAndLabels() {
+        var mine = MonitorAppearance()
+        mine.alerts.lowDisk = true
+        mine.popover.appColor = "#123456"
+        mine.update(.cpu) { $0.label = "PROC" }
+        let applied = mine.applying(preset: .minimal)
+        XCTAssertTrue(applied.alerts.lowDisk)
+        XCTAssertEqual(applied.popover.appColor, "#123456")
+        XCTAssertEqual(applied.label(.cpu), "PROC")
+        XCTAssertEqual(applied.style(.cpu).colorMode, .monochrome, "the preset's style still applies")
+    }
+
+    func testMigratesLegacyKeys() {
+        let defaults = UserDefaults(suiteName: "nexo.tests.monitorLegacy")!
+        defaults.removePersistentDomain(forName: "nexo.tests.monitorLegacy")
+        defaults.set(["network", "cpu"], forKey: "monitor.metrics")
+        defaults.set(["network", "gpu", "cpu", "memory"], forKey: "monitor.order")
+        defaults.set(1, forKey: "monitor.style")
+        let appearance = MonitorAppearanceStore(defaults: defaults).appearance
+        XCTAssertEqual(appearance.menuBarMetrics, [.network, .cpu])
+        XCTAssertEqual(appearance.style(.cpu).kind, .bar)
+    }
+
+    func testMemoryColorStaysOnPressureLevelUnlessOverridden() {
+        var appearance = MonitorAppearance()
+        var sample = MonitorSample()
+        sample.pressure = MemoryPressure(level: .warning, percent: 5)
+        XCTAssertEqual(appearance.color(.memory, sample), .systemYellow)
+        appearance.update(.memory) { $0.colorMode = .custom; $0.customColor = "#FF0000" }
+        XCTAssertEqual(appearance.color(.memory, sample).hexString, "#FF0000FF")
+    }
+
+    func testCustomThresholds() {
+        var appearance = MonitorAppearance()
+        appearance.update(.cpu) { $0.warning = 0.5; $0.critical = 0.6 }
+        var sample = MonitorSample()
+        sample.cpuLoad = CPULoad(total: 0.55, user: 0.5, system: 0.05, idle: 0.45, perCore: [])
+        XCTAssertEqual(appearance.color(.cpu, sample), .systemOrange)
+        sample.cpuLoad?.total = 0.65
+        XCTAssertEqual(appearance.color(.cpu, sample), .systemRed)
+    }
+}
+
+final class MonitorExtrasTests: XCTestCase {
+    func testParsesPsOutputWithSpacesInNames() {
+        let output = "  123  12.5  2048 Google Chrome Helper\n 9 0,3 10 launchd\ngarbage\n"
+        let processes = TopProcessesReader.parse(output)
+        XCTAssertEqual(processes.count, 2)
+        XCTAssertEqual(processes[0], ProcessUsage(pid: 123, name: "Google Chrome Helper", cpu: 12.5, memory: 2048 * 1024))
+        XCTAssertEqual(processes[1].cpu, 0.3, accuracy: 0.001)
+    }
+
+    func testAlertsFireOncePerEpisode() {
+        var posted = [String]()
+        var now = Date(timeIntervalSince1970: 0)
+        let alerter = MonitorAlerter(now: { now }, post: { title, _ in posted.append(title) })
+        var alerts = MonitorAlerts()
+        alerts.memoryPressure = true
+        alerts.cpuSustained = true
+        alerts.cpuThreshold = 0.8
+        alerts.cpuSeconds = 30
+        var sample = MonitorSample()
+        sample.pressure = MemoryPressure(level: .warning, percent: 40)
+        alerter.evaluate(sample, alerts)
+        alerter.evaluate(sample, alerts)
+        XCTAssertEqual(posted, ["Memory pressure warning"])
+        sample.pressure = MemoryPressure(level: .critical, percent: 80)
+        alerter.evaluate(sample, alerts)
+        XCTAssertEqual(posted.last, "Memory pressure critical")
+
+        posted.removeAll()
+        sample.pressure = MemoryPressure(level: .normal, percent: 10)
+        sample.cpuLoad = CPULoad(total: 0.9, user: 0.9, system: 0, idle: 0.1, perCore: [])
+        alerter.evaluate(sample, alerts)
+        now = now.addingTimeInterval(29)
+        alerter.evaluate(sample, alerts)
+        XCTAssertTrue(posted.isEmpty)
+        now = now.addingTimeInterval(2)
+        alerter.evaluate(sample, alerts)
+        alerter.evaluate(sample, alerts)
+        XCTAssertEqual(posted, ["High CPU usage"])
+        sample.cpuLoad = CPULoad(total: 0.1, user: 0.1, system: 0, idle: 0.9, perCore: [])
+        alerter.evaluate(sample, alerts)
+        sample.cpuLoad = CPULoad(total: 0.95, user: 0.95, system: 0, idle: 0.05, perCore: [])
+        alerter.evaluate(sample, alerts)
+        now = now.addingTimeInterval(31)
+        alerter.evaluate(sample, alerts)
+        XCTAssertEqual(posted, ["High CPU usage", "High CPU usage"], "re-armed after dropping below the threshold")
+    }
+
+    func testLowDiskAlertHasHysteresis() {
+        var posted = 0
+        let alerter = MonitorAlerter(post: { _, _ in posted += 1 })
+        var alerts = MonitorAlerts()
+        alerts.lowDisk = true
+        alerts.lowDiskFraction = 0.1
+        var sample = MonitorSample()
+        sample.diskFree = (free: 9, total: 100)
+        alerter.evaluate(sample, alerts)
+        sample.diskFree = (free: 11, total: 100)
+        alerter.evaluate(sample, alerts)
+        sample.diskFree = (free: 9, total: 100)
+        alerter.evaluate(sample, alerts)
+        XCTAssertEqual(posted, 1, "hovering around the threshold doesn't re-notify")
+        sample.diskFree = (free: 20, total: 100)
+        alerter.evaluate(sample, alerts)
+        sample.diskFree = (free: 5, total: 100)
+        alerter.evaluate(sample, alerts)
+        XCTAssertEqual(posted, 2)
+        sample.diskFree = (free: 0, total: 0)
+        alerter.evaluate(sample, alerts)
+        XCTAssertEqual(posted, 2)
+    }
+}

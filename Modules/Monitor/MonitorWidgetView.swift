@@ -1,60 +1,55 @@
 import Cocoa
 
-enum MonitorWidgetStyle: Int, CaseIterable {
-    case text, bar, dot
-
-    var title: String {
-        switch self {
-        case .text: return "Label + value"
-        case .bar: return "Bar + value"
-        case .dot: return "Dot + value"
-        }
-    }
-}
-
-/// Draws the enabled metrics side by side inside the monitor's status item button.
+/// Draws the enabled metrics side by side inside the monitor's status item button, each with its own
+/// `MetricStyle` (label, kind, colors, width) and the global spacing/separators/font sizes.
 final class MonitorWidgetView: NSView {
-    var metrics = [Metric]() { didSet { invalidateIntrinsicContentSize(); needsDisplay = true } }
-    var style = MonitorWidgetStyle.bar { didSet { invalidateIntrinsicContentSize(); needsDisplay = true } }
+    var config = MonitorAppearance() { didSet { invalidateIntrinsicContentSize(); needsDisplay = true } }
     var sample = MonitorSample() { didSet { needsDisplay = true } }
+    var history = [Metric: [Double]]() { didSet { needsDisplay = true } }
 
-    private static let segmentWidth: CGFloat = 40
-    private static let networkWidth: CGFloat = 66
-    private static let networkFont = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
     private static let indicatorWidth: CGFloat = 5
-    private static let labelFont = NSFont.systemFont(ofSize: 7, weight: .semibold)
-    private static let valueFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium)
+    private static let separatorWidth: CGFloat = 1
+
+    private var metrics: [Metric] { config.menuBarMetrics }
+    private var labelFont: NSFont { .systemFont(ofSize: CGFloat(config.labelSize), weight: .semibold) }
+    private var valueFont: NSFont { .monospacedDigitSystemFont(ofSize: CGFloat(config.valueSize), weight: config.boldValues ? .bold : .medium) }
+    private var networkFont: NSFont {
+        .monospacedDigitSystemFont(ofSize: CGFloat(max(8, config.valueSize - 1)), weight: config.boldValues ? .bold : .semibold)
+    }
 
     override var intrinsicContentSize: NSSize {
-        NSSize(width: max(Self.segmentWidth, metrics.map(width(of:)).reduce(0, +)), height: NSStatusBar.system.thickness)
+        let widths = metrics.map(width(of:))
+        let gaps = CGFloat(max(0, widths.count - 1)) * gap
+        return NSSize(width: max(20, widths.reduce(0, +) + gaps + 4), height: NSStatusBar.system.thickness)
+    }
+
+    private var gap: CGFloat {
+        CGFloat(config.spacing) + (config.separators ? Self.separatorWidth + CGFloat(config.spacing) : 0)
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        var x: CGFloat = 0
-        for metric in metrics {
+        var x: CGFloat = 2
+        for (index, metric) in metrics.enumerated() {
+            if index > 0 {
+                if config.separators {
+                    let lineX = x + CGFloat(config.spacing)
+                    NSColor.tertiaryLabelColor.setFill()
+                    NSRect(x: lineX, y: 4, width: Self.separatorWidth, height: bounds.height - 8).fill()
+                }
+                x += gap
+            }
             let width = width(of: metric)
-            let rect = NSRect(x: x, y: 0, width: width, height: bounds.height)
-            metric == .network ? drawNetwork(in: rect) : drawSegment(metric, in: rect)
+            draw(metric, in: NSRect(x: x, y: 0, width: width, height: bounds.height))
             x += width
         }
     }
 
-    /// Memory takes its color from the kernel pressure level only; every other metric uses the menu bar
-    /// text color, with orange/red thresholds for CPU and temperature.
+    // MARK: Back-compat helpers (tests, popover)
+
+    /// Default automatic color (memory: kernel pressure level only).
     static func color(_ metric: Metric, _ sample: MonitorSample) -> NSColor {
-        switch metric {
-        case .memory:
-            switch sample.pressure.level {
-            case .normal: return .systemGreen
-            case .warning: return .systemYellow
-            case .critical: return .systemRed
-            }
-        case .cpu: return threshold(sample.cpu, warning: 0.7, critical: 0.9)
-        case .gpu: return threshold(sample.gpu?.device, warning: 0.7, critical: 0.9)
-        case .temperature: return threshold(sample.temperature.map { $0.maximum / 100 }, warning: 0.8, critical: 0.95)
-        case .battery: return sample.battery.map { $0.percent <= 15 && !$0.onAC ? .systemRed : .labelColor } ?? .labelColor
-        case .network, .disk: return .labelColor
-        }
+        let color = MonitorAppearance.automaticColor(metric, sample, style: MonitorAppearance.defaultStyle(metric))
+        return color == .controlAccentColor ? .labelColor : color
     }
 
     static func value(_ metric: Metric, _ sample: MonitorSample) -> String {
@@ -69,55 +64,191 @@ final class MonitorWidgetView: NSView {
         }
     }
 
-    private static func threshold(_ value: Double?, warning: Double, critical: Double) -> NSColor {
-        guard let value else { return .labelColor }
-        return value >= critical ? .systemRed : value >= warning ? .systemOrange : .labelColor
-    }
-
-    private func drawSegment(_ metric: Metric, in rect: NSRect) {
-        let color = Self.color(metric, sample)
-        var textRect = rect.insetBy(dx: 2, dy: 0)
-        switch style {
-        case .text: break
-        case .bar:
-            drawBar(sample.fraction(metric) ?? 0, color: color, in: NSRect(x: rect.minX + 2, y: 4, width: Self.indicatorWidth, height: rect.height - 8))
-            textRect = textRect.divided(atDistance: Self.indicatorWidth + 3, from: .minXEdge).remainder
-        case .dot:
-            let dot = NSRect(x: rect.minX + 2, y: rect.midY - 3, width: 6, height: 6)
-            color.setFill()
-            NSBezierPath(ovalIn: dot).fill()
-            textRect = textRect.divided(atDistance: 9, from: .minXEdge).remainder
-        }
-        draw(metric.shortLabel, font: Self.labelFont, color: .secondaryLabelColor, at: NSPoint(x: textRect.minX, y: rect.midY + 1))
-        let valueColor = style == .text && metric == .memory ? color : NSColor.labelColor
-        draw(Self.value(metric, sample), font: Self.valueFont, color: valueColor, at: NSPoint(x: textRect.minX, y: rect.midY - 11))
-    }
+    // MARK: Layout
 
     private func width(of metric: Metric) -> CGFloat {
-        metric == .network ? Self.networkWidth : Self.segmentWidth
+        let style = config.style(metric)
+        let extra = CGFloat(max(0, style.extraWidth))
+        if metric == .network { return networkWidth(style) + extra }
+        let verticalLabel = style.showLabel ? 8 : 0 as CGFloat
+        switch style.kind {
+        case .line: return verticalLabel + Self.chartWidth(style.chartHistory) + extra
+        case .pie: return verticalLabel + NSStatusBar.system.thickness - 4 + extra
+        case .text: return textColumnWidth(metric, style) + extra
+        case .bar: return Self.indicatorWidth + 3 + textColumnWidth(metric, style) + extra
+        case .dot: return 9 + textColumnWidth(metric, style) + extra
+        }
     }
 
-    /// Upload over download, arrows tinted when traffic is flowing (like Stats).
-    private func drawNetwork(in rect: NSRect) {
-        let network = sample.network
-        let rows: [(String, Double?, NSColor)] = [("↑", network?.upload, .systemRed), ("↓", network?.download, .systemBlue)]
-        for (index, row) in rows.enumerated() {
-            let y = index == 0 ? rect.midY : rect.midY - 10
-            let active = (row.1 ?? 0) >= 1024
-            draw(row.0, font: Self.networkFont, color: active ? row.2 : .secondaryLabelColor, at: NSPoint(x: rect.minX + 2, y: y))
-            let text = row.1.map(MonitorFormat.spacedRate) ?? "–"
-            let attributes: [NSAttributedString.Key: Any] = [.font: Self.networkFont]
-            let width = (text as NSString).size(withAttributes: attributes).width
-            draw(text, font: Self.networkFont, color: .labelColor, at: NSPoint(x: rect.maxX - 3 - width, y: y))
+    static func chartWidth(_ history: Int) -> CGFloat {
+        switch history {
+        case ..<45: return 24
+        case ..<75: return 32
+        case ..<105: return 42
+        default: return 52
         }
+    }
+
+    /// Wide enough for the label and the widest value ("100%"), so the item doesn't jitter.
+    private func textColumnWidth(_ metric: Metric, _ style: MetricStyle) -> CGFloat {
+        let widest = metric == .temperature ? "100°" : "100%"
+        var width = size(widest, valueFont).width
+        if style.showLabel { width = max(width, size(config.label(metric), labelFont).width) }
+        return ceil(width) + 2
+    }
+
+    private func networkWidth(_ style: MetricStyle) -> CGFloat {
+        let arrow = style.arrowStyle.symbols.map { ceil(size($0.up, networkFont).width) + 3 } ?? 0
+        let value = ceil(size("999 KB/s", networkFont).width)
+        let column = arrow + value + 2
+        let label = style.showLabel ? 8 : 0 as CGFloat
+        switch style.networkLayout {
+        case .twoRows, .downloadOnly, .uploadOnly: return label + column
+        case .oneRow: return label + column * 2 + 4
+        }
+    }
+
+    // MARK: Drawing
+
+    private func draw(_ metric: Metric, in rect: NSRect) {
+        let style = config.style(metric)
+        if metric == .network { return drawNetwork(style, in: rect) }
+        let color = config.color(metric, sample)
+        var rect = rect
+        switch style.kind {
+        case .text:
+            drawText(metric, style, color: color, in: rect)
+        case .bar:
+            drawBar(sample.fraction(metric) ?? 0, color: color, in: NSRect(x: rect.minX, y: 4, width: Self.indicatorWidth, height: rect.height - 8))
+            rect = rect.divided(atDistance: Self.indicatorWidth + 3, from: .minXEdge).remainder
+            drawText(metric, style, color: color, in: rect)
+        case .dot:
+            color.setFill()
+            NSBezierPath(ovalIn: NSRect(x: rect.minX, y: rect.midY - 3, width: 6, height: 6)).fill()
+            rect = rect.divided(atDistance: 9, from: .minXEdge).remainder
+            drawText(metric, style, color: color, in: rect)
+        case .line:
+            rect = drawVerticalLabel(metric, style, in: rect)
+            drawLine(history[metric] ?? [], count: style.chartHistory, color: color, in: rect)
+        case .pie:
+            rect = drawVerticalLabel(metric, style, in: rect)
+            drawPie(sample.fraction(metric) ?? 0, color: color, in: rect)
+        }
+    }
+
+    private func drawText(_ metric: Metric, _ style: MetricStyle, color: NSColor, in rect: NSRect) {
+        let valueColor = style.colorizeValue ? color : NSColor.labelColor
+        let value = Self.value(metric, sample)
+        guard style.showLabel else {
+            let height = size(value, valueFont).height
+            draw(value, font: valueFont, color: valueColor, at: NSPoint(x: rect.minX, y: rect.midY - height / 2))
+            return
+        }
+        draw(config.label(metric), font: labelFont, color: .secondaryLabelColor, at: NSPoint(x: rect.minX, y: rect.midY + 1))
+        let valueHeight = size(value, valueFont).height
+        draw(value, font: valueFont, color: valueColor, at: NSPoint(x: rect.minX, y: rect.midY - valueHeight + 2))
+    }
+
+    /// Stats-style stacked letters (up to 3) on the left of a chart. Returns the remaining rect.
+    private func drawVerticalLabel(_ metric: Metric, _ style: MetricStyle, in rect: NSRect) -> NSRect {
+        guard style.showLabel else { return rect }
+        let letters = Array(config.label(metric).uppercased().prefix(3))
+        let font = labelFont
+        let lineHeight = (rect.height - 4) / 3
+        for (index, letter) in letters.enumerated() {
+            let text = String(letter)
+            let width = size(text, font).width
+            let y = rect.maxY - 2 - lineHeight * CGFloat(index + 1) + (lineHeight - 8) / 2
+            draw(text, font: font, color: .secondaryLabelColor, at: NSPoint(x: rect.minX + (6 - width) / 2, y: y))
+        }
+        return rect.divided(atDistance: 8, from: .minXEdge).remainder
+    }
+
+    private func drawLine(_ values: [Double], count: Int, color: NSColor, in rect: NSRect) {
+        let box = rect.insetBy(dx: 0, dy: 3)
+        NSColor.quaternaryLabelColor.setFill()
+        NSBezierPath(roundedRect: box, xRadius: 2, yRadius: 2).fill()
+        let points = values.suffix(max(2, count))
+        guard points.count > 1 else { return }
+        let step = box.width / CGFloat(max(1, count - 1))
+        let offset = CGFloat(count - points.count) * step
+        let path = NSBezierPath()
+        for (index, value) in points.enumerated() {
+            let point = NSPoint(x: box.minX + offset + CGFloat(index) * step, y: box.minY + 1 + (box.height - 2) * CGFloat(value.unit))
+            index == 0 ? path.move(to: point) : path.line(to: point)
+        }
+        let fill = path.copy() as! NSBezierPath
+        fill.line(to: NSPoint(x: box.maxX, y: box.minY))
+        fill.line(to: NSPoint(x: box.minX + offset, y: box.minY))
+        fill.close()
+        color.withAlphaComponent(0.3).setFill()
+        fill.fill()
+        color.setStroke()
+        path.lineWidth = 1
+        path.stroke()
+    }
+
+    private func drawPie(_ fraction: Double, color: NSColor, in rect: NSRect) {
+        let diameter = min(rect.width, rect.height - 4)
+        let circle = NSRect(x: rect.minX, y: rect.midY - diameter / 2, width: diameter, height: diameter)
+        NSColor.tertiaryLabelColor.setFill()
+        NSBezierPath(ovalIn: circle).fill()
+        guard fraction > 0 else { return }
+        let center = NSPoint(x: circle.midX, y: circle.midY)
+        let slice = NSBezierPath()
+        slice.move(to: center)
+        slice.appendArc(withCenter: center, radius: diameter / 2, startAngle: 90, endAngle: 90 - 360 * CGFloat(fraction.unit), clockwise: true)
+        slice.close()
+        color.setFill()
+        slice.fill()
+    }
+
+    private func drawNetwork(_ style: MetricStyle, in rect: NSRect) {
+        var rect = rect
+        if style.showLabel { rect = drawVerticalLabel(.network, style, in: rect) }
+        let up = NSColor(hex: style.uploadColor) ?? .systemRed
+        let down = NSColor(hex: style.downloadColor) ?? .systemBlue
+        let rows: [(symbol: String?, value: Double?, color: NSColor)] = [
+            (style.arrowStyle.symbols?.up, sample.network?.upload, up),
+            (style.arrowStyle.symbols?.down, sample.network?.download, down),
+        ]
+        let lineHeight = size("0", networkFont).height
+        switch style.networkLayout {
+        case .twoRows:
+            drawRate(rows[0], style, in: NSRect(x: rect.minX, y: rect.midY - 1, width: rect.width, height: lineHeight))
+            drawRate(rows[1], style, in: NSRect(x: rect.minX, y: rect.midY - lineHeight + 1, width: rect.width, height: lineHeight))
+        case .oneRow:
+            let half = (rect.width - 4) / 2
+            let y = rect.midY - lineHeight / 2
+            drawRate(rows[1], style, in: NSRect(x: rect.minX, y: y, width: half, height: lineHeight))
+            drawRate(rows[0], style, in: NSRect(x: rect.minX + half + 4, y: y, width: half, height: lineHeight))
+        case .downloadOnly, .uploadOnly:
+            let row = style.networkLayout == .downloadOnly ? rows[1] : rows[0]
+            drawRate(row, style, in: NSRect(x: rect.minX, y: rect.midY - lineHeight / 2, width: rect.width, height: lineHeight))
+        }
+    }
+
+    private func drawRate(_ row: (symbol: String?, value: Double?, color: NSColor), _ style: MetricStyle, in rect: NSRect) {
+        let active = (row.value ?? 0) >= 1024
+        if let symbol = row.symbol {
+            draw(symbol, font: networkFont, color: active ? row.color : .secondaryLabelColor, at: NSPoint(x: rect.minX, y: rect.minY))
+        }
+        let text = row.value.map(MonitorFormat.spacedRate) ?? "–"
+        let width = size(text, networkFont).width
+        let color = style.colorizeValue && active ? row.color : NSColor.labelColor
+        draw(text, font: networkFont, color: color, at: NSPoint(x: rect.maxX - width, y: rect.minY))
     }
 
     private func drawBar(_ fraction: Double, color: NSColor, in rect: NSRect) {
         NSColor.tertiaryLabelColor.setFill()
         NSBezierPath(roundedRect: rect, xRadius: 1.5, yRadius: 1.5).fill()
-        let filled = NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height * CGFloat(max(0, min(1, fraction))))
+        let filled = NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height * CGFloat(fraction.unit))
         color.setFill()
         NSBezierPath(roundedRect: filled, xRadius: 1.5, yRadius: 1.5).fill()
+    }
+
+    private func size(_ text: String, _ font: NSFont) -> NSSize {
+        (text as NSString).size(withAttributes: [.font: font])
     }
 
     private func draw(_ text: String, font: NSFont, color: NSColor, at point: NSPoint) {
@@ -125,22 +256,33 @@ final class MonitorWidgetView: NSView {
     }
 }
 
+extension Comparable {
+    func clamped(_ lower: Self, _ upper: Self) -> Self { min(max(self, lower), upper) }
+}
+
+extension Double {
+    /// NaN-safe 0–1 clamp for drawing.
+    var unit: Double { isFinite ? clamped(0, 1) : 0 }
+}
+
 /// Small line chart of the last samples, 0–1 range.
 final class SparklineView: NSView {
     var values = [Double]() { didSet { needsDisplay = true } }
     var color = NSColor.controlAccentColor
+    var capacity = 60 { didSet { needsDisplay = true } }
 
     override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: 24) }
 
     override func draw(_ dirtyRect: NSRect) {
         NSColor.quaternaryLabelColor.setFill()
         NSBezierPath(roundedRect: bounds, xRadius: 4, yRadius: 4).fill()
-        guard values.count > 1 else { return }
-        let step = bounds.width / CGFloat(MonitorSampler.historyLength - 1)
-        let offset = CGFloat(MonitorSampler.historyLength - values.count) * step
+        let points = values.suffix(max(2, capacity))
+        guard points.count > 1 else { return }
+        let step = bounds.width / CGFloat(max(1, capacity - 1))
+        let offset = CGFloat(capacity - points.count) * step
         let path = NSBezierPath()
-        for (index, value) in values.enumerated() {
-            let point = NSPoint(x: offset + CGFloat(index) * step, y: 2 + (bounds.height - 4) * CGFloat(max(0, min(1, value))))
+        for (index, value) in points.enumerated() {
+            let point = NSPoint(x: offset + CGFloat(index) * step, y: 2 + (bounds.height - 4) * CGFloat(value.unit))
             index == 0 ? path.move(to: point) : path.line(to: point)
         }
         color.setStroke()
