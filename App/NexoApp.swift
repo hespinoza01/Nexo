@@ -8,6 +8,7 @@ enum NexoCore {
     private static var settingsWindow: SettingsWindowController?
 
     static func launch() {
+        NexoVisibility.applyActivationPolicy()
         // Status item first: module launches (the switcher's onboarding) anchor popovers to it.
         statusItem = StatusItemController(registry: registry) { showSettings(moduleId: $0) }
         registerModules()

@@ -516,3 +516,7 @@
 "Applies to the whole menu bar. Each app picks it up when it relaunches; log out and back in to apply it to all of them." = "Applies to the whole menu bar. Each app picks it up when it relaunches; log out and back in to apply it to all of them.";
 "%d pt" = "%d pt";
 "Default (%d pt)" = "Default (%d pt)";
+"Show Nexo in the Dock, recent apps and ⌘Tab" = "Show Nexo in the Dock, recent apps and ⌘Tab";
+"Show Nexo's windows in the window switcher" = "Show Nexo's windows in the window switcher";
+"Visibility" = "Visibility";
+"The window switcher change applies after restarting Nexo. macOS keeps its own “Recent Items” list in the Apple menu; set how many it remembers (or 0) in System Settings › Desktop & Dock." = "The window switcher change applies after restarting Nexo. macOS keeps its own “Recent Items” list in the Apple menu; set how many it remembers (or 0) in System Settings › Desktop & Dock.";

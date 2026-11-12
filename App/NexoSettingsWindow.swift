@@ -237,6 +237,7 @@ private final class GeneralPane: NSStackView {
         addArrangedSubview(title)
         addArrangedSubview(LanguagePicker())
         addArrangedSubview(loginItemCheckbox())
+        addArrangedSubview(VisibilityOptions())
         if SMAppService.mainApp.status == .requiresApproval { addArrangedSubview(loginApprovalRow()) }
         addArrangedSubview(NSTextField(labelWithString: L("Modules")))
         registry.modules.forEach { addArrangedSubview(moduleCheckbox($0)) }

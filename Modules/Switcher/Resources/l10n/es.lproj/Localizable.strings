@@ -516,3 +516,7 @@
 "Applies to the whole menu bar. Each app picks it up when it relaunches; log out and back in to apply it to all of them." = "Se aplica a toda la barra de menús. Cada app lo toma al volver a abrirse; cierra sesión y vuelve a entrar para aplicarlo a todas.";
 "%d pt" = "%d pt";
 "Default (%d pt)" = "Predeterminado (%d pt)";
+"Show Nexo in the Dock, recent apps and ⌘Tab" = "Mostrar Nexo en el Dock, apps recientes y ⌘Tab";
+"Show Nexo's windows in the window switcher" = "Mostrar las ventanas de Nexo en el selector de ventanas";
+"Visibility" = "Visibilidad";
+"The window switcher change applies after restarting Nexo. macOS keeps its own “Recent Items” list in the Apple menu; set how many it remembers (or 0) in System Settings › Desktop & Dock." = "El cambio del selector de ventanas se aplica al reiniciar Nexo. macOS lleva su propia lista de “Ítems recientes” en el menú Apple; elige cuántos recuerda (o 0) en Ajustes del Sistema › Escritorio y Dock.";

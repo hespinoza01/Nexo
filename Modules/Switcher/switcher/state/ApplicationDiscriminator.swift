@@ -3,6 +3,8 @@ class ApplicationDiscriminator {
                                     evidence: ApplicationAdmissionEvidence = .discovery) -> Bool {
         // an app can start with .activationPolicy == .prohibited, then transition to != .prohibited later
         // an app can be both activationPolicy == .accessory and XPC (e.g. com.apple.dock.etci)
+        // Nexo: its own Settings window stays out of the switcher unless the user opts in.
+        if processIdentifier == ProcessInfo.processInfo.processIdentifier && !NexoVisibility.showInSwitcher { return false }
         let isZombie = processIdentifier.isZombie()
         guard !isZombie else {
             Logger.debug { logTemplate("zombie process", processIdentifier, bundleIdentifier) }
