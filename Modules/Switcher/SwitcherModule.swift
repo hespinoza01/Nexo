@@ -36,7 +36,6 @@ final class SwitcherModule: NexoModule {
         App.isSwitcherEnabled = false
         App.hideUi()
         KeyboardEvents.toggleGlobalShortcuts(true)
-        SettingsWindow.shared?.close()
         // Give ⌘Tab back to macOS while the switcher is off.
         if App.didContinueAppLaunch { setNativeCommandTabEnabled(true) }
     }
@@ -45,20 +44,70 @@ final class SwitcherModule: NexoModule {
         Menubar.moduleMenuItems()
     }
 
+    var settingsFillsHeight: Bool { true }
+
+    /// The switcher's own sections (Appearance, Controls, General, Exceptions), embedded in Nexo's
+    /// settings window: a section picker and search on top, the sections scrolling below.
     func settingsView() -> NSView {
-        let info = NSTextField(wrappingLabelWithString:
-            isRunning ? "Shortcuts, appearance, filters and exceptions for the window switcher live in their own window."
+        guard isRunning, let window = App.settingsWindowForEmbedding() else {
+            return NSTextField(wrappingLabelWithString: isRunning
+                ? "The window switcher is still starting (it waits for Accessibility and Screen Recording). Come back in a moment."
                 : "Enable the module to configure the window switcher.")
-        let button = NSButton(title: "Open Switcher Settings…", target: self, action: #selector(openSwitcherSettings))
-        button.isEnabled = isRunning
-        let stack = NSStackView(views: [info, button])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 10
-        return stack
+        }
+        return SwitcherSettingsPane(window: window, host: NexoCore.settingsHostWindow)
+    }
+}
+
+/// Section picker + search over the embedded `SettingsWindow` sections pane.
+private final class SwitcherSettingsPane: NSView, NSSearchFieldDelegate {
+    private let settings: SettingsWindow
+    private let picker: NSSegmentedControl
+    private let search = NSSearchField()
+    private let ids: [String]
+
+    init(window: SettingsWindow, host: NSWindow?) {
+        self.settings = window
+        let sections = window.sectionTitles
+        ids = sections.map(\.id)
+        picker = NSSegmentedControl(labels: sections.map(\.title), trackingMode: .selectOne, target: nil, action: nil)
+        super.init(frame: .zero)
+        picker.target = self
+        picker.action = #selector(pick(_:))
+        picker.selectedSegment = 0
+        search.placeholderString = "Search switcher settings"
+        search.delegate = self
+        search.sendsSearchStringImmediately = true
+        let content = window.embeddedContent(host: host)
+        let bar = NSStackView(views: [picker, NSView(), search])
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        [bar, content].forEach(addSubview)
+        NSLayoutConstraint.activate([
+            bar.topAnchor.constraint(equalTo: topAnchor),
+            bar.leadingAnchor.constraint(equalTo: leadingAnchor),
+            bar.trailingAnchor.constraint(equalTo: trailingAnchor),
+            search.widthAnchor.constraint(equalToConstant: 200),
+            content.topAnchor.constraint(equalTo: bar.bottomAnchor, constant: 8),
+            content.leadingAnchor.constraint(equalTo: leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: trailingAnchor),
+            content.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+        let minWidth = content.widthAnchor.constraint(greaterThanOrEqualToConstant: SettingsWindow.contentWidth + 40)
+        minWidth.priority = .init(999)
+        minWidth.isActive = true
+        window.onSectionSelected = { [weak self] id in
+            guard let self, let index = self.ids.firstIndex(of: id) else { return }
+            self.picker.selectedSegment = index
+        }
     }
 
-    @objc private func openSwitcherSettings() {
-        App.showSettingsWindow()
+    required init?(coder: NSCoder) { fatalError("programmatic only") }
+
+    @objc private func pick(_ sender: NSSegmentedControl) {
+        guard ids.indices.contains(sender.selectedSegment) else { return }
+        settings.navigateToSection(ids[sender.selectedSegment])
+    }
+
+    func controlTextDidChange(_ notification: Notification) {
+        settings.search(search.stringValue)
     }
 }

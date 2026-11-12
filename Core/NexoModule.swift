@@ -35,6 +35,8 @@ protocol NexoModule: AnyObject {
     func menuItems() -> [NSMenuItem]
     /// Content of this module's page in the settings window.
     func settingsView() -> NSView
+    /// True when `settingsView()` scrolls on its own and should fill the page; otherwise the page scrolls it.
+    var settingsFillsHeight: Bool { get }
 }
 
 extension NexoModule {
@@ -42,4 +44,5 @@ extension NexoModule {
     var enabledByDefault: Bool { true }
     var permissions: [ModulePermission] { [] }
     func menuItems() -> [NSMenuItem] { [] }
+    var settingsFillsHeight: Bool { false }
 }

@@ -888,7 +888,7 @@ class ControlsTab {
 
     /// The prompt both conflict detectors raise: unassign whatever holds the shortcut, or cancel
     /// (Esc). `true` means the user chose to unassign. It is a sheet on `window`, which defaults to Settings.
-    static func confirmUnassigningConflict(_ informativeText: String, in window: NSWindow? = SettingsWindow.shared) -> Bool {
+    static func confirmUnassigningConflict(_ informativeText: String, in window: NSWindow? = SettingsWindow.presenter) -> Bool {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = NSLocalizedString("Conflicting shortcut", comment: "")

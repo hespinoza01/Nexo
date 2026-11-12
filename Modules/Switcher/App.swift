@@ -136,13 +136,15 @@ class App: NSApplication {
             pendingShowSettingsWindow = true
             return
         }
+        // Nexo: the switcher's sections live in Nexo's own settings window, not a separate one.
+        NexoCore.showSettings(moduleId: SwitcherModule.id)
+    }
+
+    /// The offscreen window that owns the switcher's settings sections (see `SettingsWindow.embeddedContent`).
+    static func settingsWindowForEmbedding() -> SettingsWindow? {
+        guard didContinueAppLaunch else { return nil }
         initializeSettingsWindowIfNeeded()
-        showSecondaryWindow(SettingsWindow.shared!)
-        if SettingsWindow.shared!.isVisible != true {
-            let window = SettingsWindow()
-            showSecondaryWindow(window)
-            window.orderFrontRegardless()
-        }
+        return SettingsWindow.shared
     }
 
     @objc static func showAboutWindow() {
@@ -207,10 +209,6 @@ class App: NSApplication {
     /// showing so the user sees the window in the middle of the screen.
     static func showAndCenterSettingsWindow() {
         showSettingsWindow()
-        if let window = SettingsWindow.shared {
-            NSScreen.preferred.repositionPanel(window)
-            window.center()
-        }
     }
 
     static func showPermissionsWindow() {

@@ -10,7 +10,17 @@ struct ClipboardEntry: Codable, Equatable {
 /// macOS has no pasteboard-change notification, so `ClipboardWatcher` polls `changeCount`
 /// (an integer read, no IPC payload) twice a second.
 final class ClipboardHistory {
-    static let limit = 200
+    static let defaultLimit = 200
+    static let limitChoices = [50, 100, 200, 500, 1000]
+    /// How many copies are kept; lowering it drops the oldest ones right away.
+    var limit = ClipboardHistory.defaultLimit {
+        didSet {
+            limit = max(1, limit)
+            guard entries.count > limit else { return }
+            entries.removeLast(entries.count - limit)
+            save()
+        }
+    }
     /// Larger copies (logs, files read as text) are skipped: they bloat the JSON that is rewritten on every copy.
     static let maxEntryLength = 100_000
     private(set) var entries = [ClipboardEntry]()
@@ -31,7 +41,7 @@ final class ClipboardHistory {
         guard !trimmed.isEmpty, text.utf16.count <= Self.maxEntryLength else { return }
         entries.removeAll { $0.text == text }
         entries.insert(ClipboardEntry(text: text, date: now, sourceApp: sourceApp), at: 0)
-        if entries.count > Self.limit { entries.removeLast(entries.count - Self.limit) }
+        if entries.count > limit { entries.removeLast(entries.count - limit) }
         save()
     }
 

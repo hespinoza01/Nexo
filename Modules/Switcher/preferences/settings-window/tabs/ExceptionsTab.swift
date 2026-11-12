@@ -164,7 +164,11 @@ class ExceptionsTab {
         dialog.allowsMultipleSelection = false
         dialog.allowedContentTypes = [.application]
         dialog.canChooseDirectories = false
-        dialog.beginSheetModal(for: SettingsWindow.shared) {
+        guard let presenter = SettingsWindow.presenter, presenter.isVisible else {
+            if dialog.runModal() == .OK, let url = dialog.url, let bundleId = Bundle(url: url)?.bundleIdentifier { addException(bundleId) }
+            return
+        }
+        dialog.beginSheetModal(for: presenter) {
             if $0 == .OK, let url = dialog.url, let bundleId = Bundle(url: url)?.bundleIdentifier {
                 addException(bundleId)
             }

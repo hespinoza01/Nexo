@@ -21,9 +21,17 @@ enum NexoCore {
         statusItem?.setIndicator(symbol, owner: owner)
     }
 
+    /// True once Nexo is quitting (including logout, restart and shutdown): modules stopping now
+    /// are not being turned off by the user.
+    private(set) static var isTerminating = false
+
     static func terminate() {
+        isTerminating = true
         registry.stopAll()
     }
+
+    /// Nexo's settings window, where embedded module UIs attach their sheets and alerts.
+    static var settingsHostWindow: NSWindow? { settingsWindow?.window }
 
     static func showSettings(moduleId: String?) {
         if settingsWindow == nil { settingsWindow = SettingsWindowController(registry: registry) }

@@ -78,6 +78,12 @@ final class FakePowerAssertions: PowerAssertionProvider {
     }
 
     func release(_ id: IOPMAssertionID) { released.append(id) }
+
+    var activityDeclarations = 0
+    func declareUserActivity(reason: String) -> IOPMAssertionID? {
+        activityDeclarations += 1
+        return 99
+    }
 }
 
 final class KeepAwakeControllerTests: XCTestCase {
@@ -96,7 +102,80 @@ final class KeepAwakeControllerTests: XCTestCase {
     func testDisplayOptionUsesDisplayAssertion() {
         let power = FakePowerAssertions()
         KeepAwakeController(provider: power).activate(.hour1, keepDisplayAwake: true)
-        XCTAssertEqual(power.created.first?.type, kIOPMAssertionTypePreventUserIdleDisplaySleep as String)
+        XCTAssertEqual(power.created.map(\.type), [kIOPMAssertionTypePreventUserIdleSystemSleep as String,
+                                                     kIOPMAssertionTypePreventUserIdleDisplaySleep as String])
+    }
+
+    func testDisplayToggleKeepsSessionAndTimer() {
+        let power = FakePowerAssertions()
+        let controller = KeepAwakeController(provider: power)
+        controller.activate(.hour1, keepDisplayAwake: false)
+        let end = controller.endDate
+        controller.setKeepDisplayAwake(true)
+        XCTAssertEqual(power.created.count, 2)
+        XCTAssertEqual(controller.endDate, end)
+        controller.setKeepDisplayAwake(false)
+        XCTAssertEqual(power.released, [2])
+        XCTAssertTrue(controller.isActive)
+    }
+
+    func testPauseReleasesAndResumeReacquires() {
+        let power = FakePowerAssertions()
+        let controller = KeepAwakeController(provider: power)
+        controller.activate(.indefinitely, keepDisplayAwake: true)
+        controller.pause()
+        XCTAssertEqual(power.released, [1, 2])
+        XCTAssertTrue(controller.isActive)
+        controller.resume()
+        XCTAssertEqual(power.created.count, 4)
+        controller.deactivate()
+        XCTAssertEqual(power.released, [1, 2, 3, 4])
+    }
+
+    func testFailedResumeEndsSession() {
+        let power = FakePowerAssertions()
+        let controller = KeepAwakeController(provider: power)
+        controller.activate(.indefinitely, keepDisplayAwake: false)
+        controller.pause()
+        controller.pause()
+        power.fail = true
+        controller.resume()
+        XCTAssertFalse(controller.isActive)
+        controller.resume()
+        XCTAssertFalse(controller.isPaused)
+    }
+
+    func testDisplayToggleWhilePausedCreatesNothing() {
+        let power = FakePowerAssertions()
+        let controller = KeepAwakeController(provider: power)
+        controller.activate(.indefinitely, keepDisplayAwake: false)
+        controller.pause()
+        controller.setKeepDisplayAwake(true)
+        XCTAssertEqual(power.created.count, 1)
+        controller.resume()
+        XCTAssertEqual(power.created.count, 3)
+    }
+
+    func testResumeWithRemainingInterval() {
+        let power = FakePowerAssertions()
+        let now = Date(timeIntervalSince1970: 1000)
+        let controller = KeepAwakeController(provider: power, now: { now })
+        XCTAssertTrue(controller.activate(for: 600, keepDisplayAwake: true))
+        XCTAssertEqual(controller.endDate, now.addingTimeInterval(600))
+        XCTAssertTrue(controller.activate(for: nil, keepDisplayAwake: true))
+        XCTAssertNil(controller.endDate)
+        controller.deactivate()
+    }
+
+    func testActivityDeclarationOnlyWhileActive() {
+        let power = FakePowerAssertions()
+        let controller = KeepAwakeController(provider: power)
+        controller.declareActivity()
+        XCTAssertEqual(power.activityDeclarations, 0)
+        controller.activate(.indefinitely, keepDisplayAwake: false, activityEvery: 5)
+        XCTAssertEqual(power.activityDeclarations, 1)
+        XCTAssertTrue(power.released.contains(99))
+        controller.deactivate()
     }
 
     func testTimedExpiryReleasesAssertion() {
@@ -120,7 +199,7 @@ final class KeepAwakeControllerTests: XCTestCase {
         controller.activate(.hour1, keepDisplayAwake: false)
         controller.activate(.hours2, keepDisplayAwake: true)
         XCTAssertEqual(power.released, [1])
-        XCTAssertEqual(power.created.count, 2)
+        XCTAssertEqual(power.created.count, 3)
     }
 
     func testFailedAssertionStaysInactive() {

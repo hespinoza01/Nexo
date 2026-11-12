@@ -47,7 +47,8 @@ final class InputSourceModule: NexoModule {
             SettingsForm.row("For apps without a rule", fallback),
             SettingsForm.header("Rules"),
             rules,
-            SettingsForm.note("Add a rule from the Nexo menu while the app is frontmost: “Use for <app>”."),
+            NSButton(title: "Add App…", target: self, action: #selector(addApp)),
+            SettingsForm.note("New rules start with the current input source. Also from the Nexo menu while the app is frontmost: “Use for <app>”."),
         ])
     }
 
@@ -138,6 +139,25 @@ final class InputSourceModule: NexoModule {
     @objc private func ruleChanged(_ sender: NSPopUpButton) {
         guard let bundleId = sender.identifier?.rawValue else { return }
         store.setRule(sender.selectedItem?.representedObject as? String, for: bundleId)
+    }
+
+    @objc private func addApp() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.allowsMultipleSelection = true
+        let add = { [weak self, weak panel] (response: NSApplication.ModalResponse) in
+            guard response == .OK, let self, let panel else { return }
+            let sourceId = InputSourceService.current()?.id ?? InputSourceService.selectable().first?.id
+            guard let sourceId else { return }
+            for url in panel.urls {
+                guard let bundleId = Bundle(url: url)?.bundleIdentifier, self.store.rules[bundleId] == nil else { continue }
+                self.store.setRule(sourceId, for: bundleId)
+            }
+            self.reloadRules()
+        }
+        guard let window = NexoCore.settingsHostWindow, window.isVisible else { return add(panel.runModal()) }
+        panel.beginSheetModal(for: window, completionHandler: add)
     }
 
     @objc private func removeRule(_ sender: NSButton) {

@@ -15,6 +15,12 @@ final class ClipboardModule: NexoModule {
         static let shortcut = "clipboard.shortcut"
         static let excluded = "clipboard.excludedApps"
         static let seeded = "clipboard.shortcutSeeded"
+        static let limit = "clipboard.limit"
+    }
+
+    private var historyLimit: Int {
+        get { ClipboardHistory.limitChoices.contains(UserDefaults.standard.integer(forKey: Key.limit)) ? UserDefaults.standard.integer(forKey: Key.limit) : ClipboardHistory.defaultLimit }
+        set { UserDefaults.standard.set(newValue, forKey: Key.limit) }
     }
 
     private let history = ClipboardHistory()
@@ -29,6 +35,7 @@ final class ClipboardModule: NexoModule {
 
     func start() {
         isRunning = true
+        history.limit = historyLimit
         watcher.excludedApps = { [weak self] in self?.excludedApps ?? ClipboardWatcher.defaultExcludedApps }
         watcher.start()
         seedShortcutOnce()
@@ -65,10 +72,16 @@ final class ClipboardModule: NexoModule {
         excluded.target = self
         excluded.action = #selector(excludedChanged(_:))
         let clear = NSButton(title: "Clear History", target: self, action: #selector(clearHistory))
+        let limit = NSPopUpButton()
+        ClipboardHistory.limitChoices.forEach { limit.addItem(withTitle: "\($0) items") }
+        limit.selectItem(at: ClipboardHistory.limitChoices.firstIndex(of: historyLimit) ?? 2)
+        limit.target = self
+        limit.action = #selector(limitChanged(_:))
         return SettingsForm.stack([
             SettingsForm.row("Open panel", shortcut),
             SettingsForm.row("Ignore copies from (bundle ids)", excluded),
-            SettingsForm.note("Keeps the last \(ClipboardHistory.limit) text copies in ~/Library/Application Support/Nexo/clipboard.json (owner-only permissions). Items password managers mark as concealed or transient are never stored; text copied from a plain browser password field has no such mark and is stored."),
+            SettingsForm.row("Keep", limit),
+            SettingsForm.note("Keeps the last text copies in ~/Library/Application Support/Nexo/clipboard.json (owner-only permissions). Items password managers mark as concealed or transient are never stored; text copied from a plain browser password field has no such mark and is stored."),
             clear,
         ])
     }
@@ -130,6 +143,11 @@ final class ClipboardModule: NexoModule {
 
     @objc private func excludedChanged(_ sender: NSTextField) {
         excludedApps = sender.stringValue.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+
+    @objc private func limitChanged(_ sender: NSPopUpButton) {
+        historyLimit = ClipboardHistory.limitChoices[sender.indexOfSelectedItem]
+        history.limit = historyLimit
     }
 
     @objc private func clearHistory() {

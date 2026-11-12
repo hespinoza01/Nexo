@@ -196,6 +196,12 @@ class SettingsWindow: NSWindow {
     private static let controlHighlightMinCornerRadius = CGFloat(4)
     private static let controlHighlightMaxCornerRadius = CGFloat(9)
     static var shared: SettingsWindow!
+    /// Nexo shows the sections inside its own settings window; sheets, alerts and panels attach there.
+    static weak var host: NSWindow?
+    /// The window sheets and alerts attach to: Nexo's settings window when embedded, otherwise this one.
+    static var presenter: NSWindow? { host?.isVisible == true ? host : shared }
+    /// Called with the section id the scroll position lands on, for the embedded section picker.
+    var onSectionSelected: ((String) -> Void)?
 
     override var canBecomeKey: Bool { SecondaryWindows.canBecomeKey }
 
@@ -860,14 +866,14 @@ class SettingsWindow: NSWindow {
         QaSheetAnimation.disable(on: sheet)
         #endif
         sheet.contentView?.layoutSubtreeIfNeeded()
-        beginSheet(sheet) { [weak self] _ in
+        (Self.presenter ?? self).beginSheet(sheet) { [weak self] _ in
             self?.clearSheetHighlights(sheet)
         }
         applySearchToSheet(sheet, searchField.stringValue)
     }
 
     private func applySearchToVisibleSheets(_ query: String) {
-        sheets.compactMap { $0 as? SheetWindow }.forEach {
+        (Self.presenter ?? self).sheets.compactMap { $0 as? SheetWindow }.forEach {
             applySearchToSheet($0, query)
         }
     }
@@ -981,6 +987,7 @@ class SettingsWindow: NSWindow {
 
     private func selectSection(_ section: SettingsSection, scroll: Bool, selectInSidebar: Bool = true) {
         selectedSectionId = section.id
+        onSectionSelected?(section.id)
         if selectInSidebar, let row = visibleSections.firstIndex(where: { $0.id == section.id }), sidebarTableView.selectedRow != row {
             sidebarTableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         }
@@ -989,7 +996,7 @@ class SettingsWindow: NSWindow {
     }
 
     private func scrollToSection(_ section: SettingsSection) {
-        guard isVisible else { return }
+        guard rightScrollView.window?.isVisible == true else { return }
         sectionsDocumentView.layoutSubtreeIfNeeded()
         let anchorFrame = section.anchor.convert(section.anchor.bounds, to: sectionsDocumentView)
         let targetY = max(anchorFrame.minY - Self.sectionScrollTopPadding, 0)
@@ -1109,6 +1116,26 @@ extension SettingsWindow: NSTableViewDataSource, NSTableViewDelegate {
         let section = visibleSections[row]
         if selectedSectionId == section.id { return }
         selectSection(section, scroll: true, selectInSidebar: false)
+    }
+}
+
+extension SettingsWindow {
+    static let sectionIds = ["appearance", "controls", "general", "exceptions"]
+
+    /// The sections pane, moved out of this (never shown) window into Nexo's settings page. The window
+    /// stays alive offscreen as the owner of the sections; calling again re-parents the same pane.
+    func embeddedContent(host: NSWindow?) -> NSView {
+        Self.host = host
+        rightScrollView.removeFromSuperview()
+        rightScrollView.translatesAutoresizingMaskIntoConstraints = false
+        return rightScrollView
+    }
+
+    /// Ids and titles of the sections, in order, for the embedded section picker.
+    var sectionTitles: [(id: String, title: String)] { sections.map { ($0.id, $0.title) } }
+
+    func search(_ query: String) {
+        applySearch(query)
     }
 }
 

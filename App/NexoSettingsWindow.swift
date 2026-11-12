@@ -13,20 +13,24 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
 
     init(registry: ModuleRegistry) {
         self.registry = registry
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 820, height: 560),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1020, height: 680),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false)
         window.title = "Nexo Settings"
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 640, height: 420)
+        window.minSize = NSSize(width: 1000, height: 460)
+        window.setFrameAutosaveName("NexoSettings")
         super.init(window: window)
         buildLayout()
         reloadEntries()
         // Permissions are granted in System Settings; rebuild the page when the user comes back.
         activeObserver = NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification,
             object: nil, queue: .main) { [weak self] _ in
-            guard let self, self.window?.isVisible == true else { return }
+            // Pages that host a live embedded UI (the switcher) keep their state; rebuilding them would
+            // reset the section picker and search, and could re-parent the view under an open sheet.
+            guard let self, self.window?.isVisible == true, self.window?.attachedSheet == nil,
+                  self.registry.module(withId: self.currentId)?.settingsFillsHeight != true else { return }
             self.showPage(self.currentId)
         }
     }
@@ -82,14 +86,41 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
     private func showPage(_ id: String) {
         currentId = id
         content.subviews.forEach { $0.removeFromSuperview() }
+        let module = registry.module(withId: id)
         let page = id == Self.generalId ? GeneralPane(registry: registry) : modulePage(id)
         page.translatesAutoresizingMaskIntoConstraints = false
-        content.addSubview(page)
+        guard module?.settingsFillsHeight != true else {
+            // The module's view scrolls itself (the switcher's sections): pin it to every edge.
+            content.addSubview(page)
+            NSLayoutConstraint.activate([
+                page.topAnchor.constraint(equalTo: content.topAnchor, constant: 40),
+                page.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
+                page.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
+                page.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            ])
+            return
+        }
+        // Every other page scrolls, so long settings are never cut off by the window height.
+        let scroll = NSScrollView()
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        scroll.hasVerticalScroller = true
+        scroll.drawsBackground = false
+        scroll.automaticallyAdjustsContentInsets = false
+        let document = SettingsPageDocumentView()
+        document.translatesAutoresizingMaskIntoConstraints = false
+        document.addSubview(page)
+        scroll.documentView = document
+        content.addSubview(scroll)
         NSLayoutConstraint.activate([
-            page.topAnchor.constraint(equalTo: content.topAnchor, constant: 40),
-            page.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
-            page.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
-            page.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -24),
+            scroll.topAnchor.constraint(equalTo: content.topAnchor, constant: 28),
+            scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            scroll.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            document.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
+            page.topAnchor.constraint(equalTo: document.topAnchor, constant: 12),
+            page.leadingAnchor.constraint(equalTo: document.leadingAnchor, constant: 24),
+            page.trailingAnchor.constraint(equalTo: document.trailingAnchor, constant: -24),
+            page.bottomAnchor.constraint(equalTo: document.bottomAnchor, constant: -24),
         ])
     }
 
@@ -124,6 +155,10 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
     }
 }
 
+private final class SettingsPageDocumentView: NSView {
+    override var isFlipped: Bool { true }
+}
+
 /// Wraps a module's own settings view with the enable toggle and its permission status.
 private final class ModulePage: NSStackView {
     private let module: NexoModule
@@ -138,7 +173,13 @@ private final class ModulePage: NSStackView {
         spacing = 16
         addArrangedSubview(header())
         module.permissions.forEach { addArrangedSubview(permissionRow($0)) }
-        addArrangedSubview(module.settingsView())
+        let settings = module.settingsView()
+        addArrangedSubview(settings)
+        guard module.settingsFillsHeight else { return }
+        // The embedded view takes all the width and the height left under the header.
+        settings.widthAnchor.constraint(equalTo: widthAnchor).isActive = true
+        settings.setContentHuggingPriority(.init(1), for: .vertical)
+        distribution = .fill
     }
 
     required init?(coder: NSCoder) { fatalError("programmatic only") }

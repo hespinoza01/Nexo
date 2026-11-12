@@ -39,7 +39,7 @@ class GeneralTab {
         cancelButton.keyEquivalent = "\u{1b}" // Escape
         let resetButton = alert.addButton(withTitle: NSLocalizedString("Reset settings and restart", comment: ""))
         resetButton.hasDestructiveAction = true
-        alert.present(attachedTo: SettingsWindow.shared) {
+        alert.present(attachedTo: SettingsWindow.presenter) {
             guard $0 == .alertSecondButtonReturn else { return }
             Preferences.resetAll()
             App.restart()
@@ -65,7 +65,7 @@ class GeneralTab {
             let alert = NSAlert()
             alert.alertStyle = .critical
             alert.messageText = NSLocalizedString("Failed to import settings", comment: "")
-            alert.present(attachedTo: SettingsWindow.shared) { _ in }
+            alert.present(attachedTo: SettingsWindow.presenter) { _ in }
             return
         }
         let filtered = dict.filter { Preferences.ownedKeys.contains($0.key) }
@@ -79,7 +79,7 @@ class GeneralTab {
         alert.addButton(withTitle: NSLocalizedString("Restart Now", comment: ""))
         let laterButton = alert.addButton(withTitle: NSLocalizedString("Later", comment: ""))
         laterButton.keyEquivalent = "\u{1b}" // Escape
-        alert.present(attachedTo: SettingsWindow.shared) {
+        alert.present(attachedTo: SettingsWindow.presenter) {
             if $0 == .alertFirstButtonReturn { App.restart() }
         }
     }
@@ -91,7 +91,7 @@ class GeneralTab {
             guard response == .OK, let url = panel.url else { return }
             DispatchQueue.main.async { onChoice(url) }
         }
-        guard let settings = SettingsWindow.shared, settings.isVisible else { return handle(panel.runModal()) }
+        guard let settings = SettingsWindow.presenter, settings.isVisible else { return handle(panel.runModal()) }
         panel.beginSheetModal(for: settings, completionHandler: handle)
     }
 
@@ -106,7 +106,7 @@ class GeneralTab {
         alert.addButton(withTitle: NSLocalizedString("Restart Now", comment: ""))
         let laterButton = alert.addButton(withTitle: NSLocalizedString("Later", comment: ""))
         laterButton.keyEquivalent = "\u{1b}" // Escape
-        alert.present(attachedTo: SettingsWindow.shared) {
+        alert.present(attachedTo: SettingsWindow.presenter) {
             if $0 == .alertFirstButtonReturn { App.restart() }
         }
     }

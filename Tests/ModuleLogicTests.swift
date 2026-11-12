@@ -169,8 +169,10 @@ final class ExtrasTests: XCTestCase {
         XCTAssertEqual(ClipboardHistory(fileURL: url).entries.map(\.text), ["a", "b"])
         let permissions = try FileManager.default.attributesOfItem(atPath: url.path)[.posixPermissions] as? Int
         XCTAssertEqual(permissions, 0o600)
-        (0..<(ClipboardHistory.limit + 5)).forEach { history.add("item \($0)", sourceApp: nil) }
-        XCTAssertEqual(history.entries.count, ClipboardHistory.limit)
+        (0..<(history.limit + 5)).forEach { history.add("item \($0)", sourceApp: nil) }
+        XCTAssertEqual(history.entries.count, ClipboardHistory.defaultLimit)
+        history.limit = 50
+        XCTAssertEqual(history.entries.count, 50)
     }
 
     func testQuitDecision() {
