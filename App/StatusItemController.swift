@@ -33,8 +33,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     private func configureButton() {
-        let name = indicators.last?.symbol ?? "square.grid.2x2"
-        let image = NSImage(systemSymbolName: name, accessibilityDescription: "Nexo")
+        // Nexo's own "N" mark, unless a module shows a state symbol (e.g. keep awake on).
+        let image = indicators.last.map { NSImage(systemSymbolName: $0.symbol, accessibilityDescription: "Nexo") }
+            ?? NSImage(named: "MenuBarIcon")
         image?.isTemplate = true
         statusItem.button?.image = image
     }

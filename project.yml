@@ -49,7 +49,7 @@ targets:
         CFBundleVersion: "1"
         LSUIElement: true
         NSPrincipalClass: "$(PRODUCT_MODULE_NAME).App"
-        CFBundleIconFile: app.png
+        CFBundleIconFile: AppIcon
         ATSApplicationFontsPath: ""
         NSSupportsAutomaticTermination: false
         NSSupportsSuddenTermination: false
