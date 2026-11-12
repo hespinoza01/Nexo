@@ -20,7 +20,7 @@ final class MonitorWidgetView: NSView {
     override var intrinsicContentSize: NSSize {
         let widths = metrics.map(width(of:))
         let gaps = CGFloat(max(0, widths.count - 1)) * gap
-        return NSSize(width: max(20, widths.reduce(0, +) + gaps + 4), height: NSStatusBar.system.thickness)
+        return NSSize(width: max(20, widths.reduce(0, +) + gaps + 2), height: NSStatusBar.system.thickness)
     }
 
     private var gap: CGFloat {

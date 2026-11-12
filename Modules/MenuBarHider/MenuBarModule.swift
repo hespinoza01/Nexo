@@ -34,10 +34,25 @@ final class MenuBarModule: NexoModule {
             return box
         }
         let open = NSButton(title: L("Open “Allow in the Menu Bar”…"), target: self, action: #selector(openSystemSettings))
+        let spacing = NSSlider(value: Double(MenuBarSpacing.current ?? MenuBarSpacing.systemDefault),
+            minValue: Double(MenuBarSpacing.range.lowerBound), maxValue: Double(MenuBarSpacing.range.upperBound),
+            target: self, action: #selector(spacingChanged(_:)))
+        spacing.numberOfTickMarks = MenuBarSpacing.range.count
+        spacing.allowsTickMarkValuesOnly = true
+        spacing.widthAnchor.constraint(equalToConstant: 220).isActive = true
+        let value = NSTextField(labelWithString: "")
+        spacingLabel = value
+        refreshSpacingLabel()
+        let reset = NSButton(title: L("Use macOS default"), target: self, action: #selector(resetSpacing))
+        let restart = NSButton(title: L("Restart Nexo to apply"), target: self, action: #selector(restartNexo))
         let version = ProcessInfo.processInfo.operatingSystemVersion
         return SettingsForm.stack([
             SettingsForm.header(L("Nexo items")),
             SettingsForm.stack(toggles, spacing: 6),
+            SettingsForm.header(L("Spacing between icons")),
+            SettingsForm.row(L("Spacing"), NSStackView(views: [spacing, value])),
+            NSStackView(views: [reset, restart]),
+            SettingsForm.note(L("Applies to the whole menu bar. Each app picks it up when it relaunches; log out and back in to apply it to all of them.")),
             SettingsForm.header(L("Other apps")),
             open,
             SettingsForm.note(L("macOS %d.%d lets you turn each app's menu bar icon on or off in System Settings › Menu Bar.", version.majorVersion, version.minorVersion)),
@@ -45,6 +60,26 @@ final class MenuBarModule: NexoModule {
                 ? L("Why there is no hidden section: since macOS 27 the menu bar is drawn as one window, so moving or collapsing items no longer hides them. The only remaining way is a private Apple API that makes the clock, battery and Wi-Fi ignore clicks while items are hidden.")
                 : L("On this macOS version a separator-based hider from another app also works alongside Nexo.")),
         ])
+    }
+
+    private weak var spacingLabel: NSTextField?
+
+    private func refreshSpacingLabel() {
+        spacingLabel?.stringValue = MenuBarSpacing.current.map { L("%d pt", $0) } ?? L("Default (%d pt)", MenuBarSpacing.systemDefault)
+    }
+
+    @objc private func spacingChanged(_ sender: NSSlider) {
+        MenuBarSpacing.set(Int(sender.doubleValue.rounded()))
+        refreshSpacingLabel()
+    }
+
+    @objc private func resetSpacing() {
+        MenuBarSpacing.set(nil)
+        refreshSpacingLabel()
+    }
+
+    @objc private func restartNexo() {
+        App.restart()
     }
 
     @objc private func openSystemSettings() {

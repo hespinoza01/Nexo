@@ -33,11 +33,27 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     private func configureButton() {
-        // Nexo's own "N" mark, unless a module shows a state symbol (e.g. keep awake on).
-        let image = indicators.last.map { NSImage(systemSymbolName: $0.symbol, accessibilityDescription: "Nexo") }
-            ?? NSImage(named: "MenuBarIcon")
+        // Always Nexo's "N" mark; an active state (e.g. keep awake on) adds a small dot instead of
+        // replacing the icon.
+        let image = indicators.isEmpty ? NSImage(named: "MenuBarIcon") : Self.badgedIcon()
         image?.isTemplate = true
         statusItem.button?.image = image
+    }
+
+    /// The N with a dot in its bottom-right corner, cut out from the letter so it stays legible.
+    private static func badgedIcon() -> NSImage? {
+        guard let base = NSImage(named: "MenuBarIcon") else { return nil }
+        let size = base.size
+        return NSImage(size: size, flipped: false) { rect in
+            base.draw(in: rect)
+            let dot = NSRect(x: size.width - 7, y: 0, width: 7, height: 7)
+            NSGraphicsContext.current?.compositingOperation = .clear
+            NSBezierPath(ovalIn: dot.insetBy(dx: -1.5, dy: -1.5)).fill()
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
+            NSColor.black.setFill()
+            NSBezierPath(ovalIn: dot).fill()
+            return true
+        }
     }
 
     private func addModuleSections() {

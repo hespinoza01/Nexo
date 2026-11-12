@@ -510,3 +510,9 @@
 "“%@” can't be used (built-in presets are read-only)." = "“%@” can't be used (built-in presets are read-only).";
 "⚠︎ Needs Accessibility permission; grant it and toggle the module." = "⚠︎ Needs Accessibility permission; grant it and toggle the module.";
 "⚠︎ macOS window tiling is on (System Settings › Desktop & Dock › “Drag windows to screen edges to tile”). Turn it off to avoid both snapping at once." = "⚠︎ macOS window tiling is on (System Settings › Desktop & Dock › “Drag windows to screen edges to tile”). Turn it off to avoid both snapping at once.";
+"Use macOS default" = "Use macOS default";
+"Restart Nexo to apply" = "Restart Nexo to apply";
+"Spacing between icons" = "Spacing between icons";
+"Applies to the whole menu bar. Each app picks it up when it relaunches; log out and back in to apply it to all of them." = "Applies to the whole menu bar. Each app picks it up when it relaunches; log out and back in to apply it to all of them.";
+"%d pt" = "%d pt";
+"Default (%d pt)" = "Default (%d pt)";

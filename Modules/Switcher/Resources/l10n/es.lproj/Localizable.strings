@@ -510,3 +510,9 @@
 "“%@” can't be used (built-in presets are read-only)." = "No se puede usar “%@” (los preajustes integrados son de solo lectura).";
 "⚠︎ Needs Accessibility permission; grant it and toggle the module." = "⚠︎ Requiere permiso de Accesibilidad; otórgalo y desactiva y vuelve a activar el módulo.";
 "⚠︎ macOS window tiling is on (System Settings › Desktop & Dock › “Drag windows to screen edges to tile”). Turn it off to avoid both snapping at once." = "⚠︎ El mosaico de ventanas de macOS está activado (Ajustes del Sistema › Escritorio y Dock › “Arrastrar ventanas a los bordes de la pantalla para organizarlas en mosaico”). Desactívalo para evitar que ambos acomoden la ventana a la vez.";
+"Use macOS default" = "Usar el valor de macOS";
+"Restart Nexo to apply" = "Reiniciar Nexo para aplicar";
+"Spacing between icons" = "Espaciado entre íconos";
+"Applies to the whole menu bar. Each app picks it up when it relaunches; log out and back in to apply it to all of them." = "Se aplica a toda la barra de menús. Cada app lo toma al volver a abrirse; cierra sesión y vuelve a entrar para aplicarlo a todas.";
+"%d pt" = "%d pt";
+"Default (%d pt)" = "Predeterminado (%d pt)";
