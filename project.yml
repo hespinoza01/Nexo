@@ -38,6 +38,12 @@ targets:
         excludes:
           - "**/*.md"
           - "**/*.h"
+          - "Switcher/Resources/native-illustrations"
+          - "Switcher/Resources/native-illustrations/**"
+      # Looked up as a subdirectory (LocalizedIllustration: native-illustrations/scenes.plist).
+      - path: Modules/Switcher/Resources/native-illustrations
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: ShortcutRecorder
     info:
