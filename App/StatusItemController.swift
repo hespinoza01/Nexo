@@ -56,9 +56,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     private func addFooter() {
-        menu.addItem(actionItem("Settings…", #selector(openSettingsAction), ","))
+        menu.addItem(actionItem(L("Settings…"), #selector(openSettingsAction), ","))
         menu.addItem(.separator())
-        menu.addItem(actionItem("Quit Nexo", #selector(quitAction), "q"))
+        menu.addItem(actionItem(L("Quit Nexo"), #selector(quitAction), "q"))
     }
 
     private func actionItem(_ title: String, _ selector: Selector, _ key: String) -> NSMenuItem {

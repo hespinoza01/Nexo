@@ -6,11 +6,11 @@ enum WidgetKind: String, Codable, CaseIterable {
 
     var title: String {
         switch self {
-        case .text: return "Label + value"
-        case .bar: return "Bar"
-        case .line: return "Line chart"
-        case .pie: return "Pie"
-        case .dot: return "Dot + value"
+        case .text: return L("Label + value")
+        case .bar: return L("Bar")
+        case .line: return L("Line chart")
+        case .pie: return L("Pie")
+        case .dot: return L("Dot + value")
         }
     }
 }
@@ -21,10 +21,10 @@ enum ColorMode: String, Codable, CaseIterable {
 
     var title: String {
         switch self {
-        case .automatic: return "Automatic (by load)"
-        case .accent: return "System accent"
-        case .monochrome: return "Monochrome"
-        case .custom: return "Custom"
+        case .automatic: return L("Automatic (by load)")
+        case .accent: return L("System accent")
+        case .monochrome: return L("Monochrome")
+        case .custom: return L("Custom")
         }
     }
 }
@@ -34,10 +34,10 @@ enum NetworkLayout: String, Codable, CaseIterable {
 
     var title: String {
         switch self {
-        case .twoRows: return "Two rows"
-        case .oneRow: return "One row"
-        case .downloadOnly: return "Download only"
-        case .uploadOnly: return "Upload only"
+        case .twoRows: return L("Two rows")
+        case .oneRow: return L("One row")
+        case .downloadOnly: return L("Download only")
+        case .uploadOnly: return L("Upload only")
         }
     }
 }
@@ -50,7 +50,7 @@ enum ArrowStyle: String, Codable, CaseIterable {
         case .arrows: return "↑ ↓"
         case .triangles: return "▲ ▼"
         case .letters: return "U D"
-        case .none: return "None"
+        case .none: return L("None")
         }
     }
 
@@ -116,7 +116,7 @@ struct MetricStyle: Codable, Equatable {
 enum PopoverDensity: String, Codable, CaseIterable {
     case compact, regular, spacious
 
-    var title: String { rawValue.capitalized }
+    var title: String { L(rawValue.capitalized) }
     var sectionSpacing: CGFloat { self == .compact ? 4 : self == .regular ? 6 : 10 }
     var rowSpacing: CGFloat { self == .compact ? 1 : self == .regular ? 2 : 4 }
     var padding: CGFloat { self == .compact ? 8 : self == .regular ? 10 : 14 }
@@ -350,7 +350,7 @@ struct MonitorAppearance: Codable, Equatable {
     }()
 
     static let presets: [(name: String, appearance: MonitorAppearance)] = [
-        ("Stats", stats), ("Minimal", minimal), ("Graphs", graphs), ("Colorful", colorful),
+        ("Classic", stats), ("Minimal", minimal), ("Graphs", graphs), ("Colorful", colorful),
     ]
 }
 

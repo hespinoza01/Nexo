@@ -9,10 +9,10 @@ enum ModulePermission: String, CaseIterable, Codable {
 
     var title: String {
         switch self {
-        case .accessibility: return "Accessibility"
-        case .screenRecording: return "Screen Recording"
-        case .automation: return "Automation"
-        case .audioCapture: return "System Audio Recording"
+        case .accessibility: return L("Accessibility")
+        case .screenRecording: return L("Screen Recording")
+        case .automation: return L("Automation")
+        case .audioCapture: return L("System Audio Recording")
         }
     }
 }

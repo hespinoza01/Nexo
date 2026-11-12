@@ -6,7 +6,7 @@ import CoreAudio
 /// again or the default output device changes.
 final class AudioMixerModule: NexoModule {
     static let id = "audioMixer"
-    let title = "Audio Mixer"
+    var title: String { L("Audio Mixer") }
     let icon = "speaker.wave.2"
     let permissions: [ModulePermission] = [.audioCapture]
     private(set) var isRunning = false
@@ -42,7 +42,7 @@ final class AudioMixerModule: NexoModule {
         }
         let apps = AudioSystem.apps()
         if apps.isEmpty {
-            let empty = NSMenuItem(title: "No apps using audio", action: nil, keyEquivalent: "")
+            let empty = NSMenuItem(title: L("No apps using audio"), action: nil, keyEquivalent: "")
             empty.isEnabled = false
             items.append(empty)
         }
@@ -57,10 +57,10 @@ final class AudioMixerModule: NexoModule {
     }
 
     func settingsView() -> NSView {
-        let reset = NSButton(title: "Reset all apps to 100 %", target: self, action: #selector(resetAll))
+        let reset = NSButton(title: L("Reset all apps to 100 %"), target: self, action: #selector(resetAll))
         return SettingsForm.stack([
-            SettingsForm.note("Move an app's slider in the Nexo menu to change only its volume (up to 150 %, with a limiter to avoid distortion). macOS asks once for “System Audio Recording” permission: Nexo captures the app's audio and plays it back at the new level."),
-            SettingsForm.note("At 100 % nothing is captured. Apps with DRM-protected audio may not allow it."),
+            SettingsForm.note(L("Move an app's slider in the Nexo menu to change only its volume (up to 150 %, with a limiter to avoid distortion). macOS asks once for “System Audio Recording” permission: Nexo captures the app's audio and plays it back at the new level.")),
+            SettingsForm.note(L("At 100 % nothing is captured. Apps with DRM-protected audio may not allow it.")),
             reset,
         ])
     }

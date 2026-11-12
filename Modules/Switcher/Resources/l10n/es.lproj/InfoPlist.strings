@@ -1,2 +1,5 @@
 /*Copyright (human-readable)*/
 "NSHumanReadableCopyright" = "Licencia GPL-3.0";
+"CFBundleDisplayName" = "Nexo";
+"NSAppleEventsUsageDescription" = "Nexo usa Automatización para leer el contexto de otras apps.";
+"NSAudioCaptureUsageDescription" = "Nexo necesita capturar audio para controlar el volumen de cada app.";

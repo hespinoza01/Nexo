@@ -174,7 +174,7 @@ struct TestInteractionModel {
     let windowedSpace: UInt64 = 1
     private var currentVisibleSpace: UInt64 = 1
 
-    private let sharedTitle = "lwouis"
+    private let sharedTitle = "Nexo"
     /// The window (by identity) whose Space transition is in flight. CGS does NOT list a transitioning
     /// window on its Space — that is WHY it reads as Space-less — so the authoritative re-query and the
     /// phantom pass must both omit it, or the model heals the transient it is supposed to expose.

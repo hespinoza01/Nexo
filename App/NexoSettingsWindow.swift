@@ -16,7 +16,7 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1020, height: 680),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false)
-        window.title = "Nexo Settings"
+        window.title = L("Nexo Settings")
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 1000, height: 460)
@@ -72,7 +72,7 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
     }
 
     private func reloadEntries() {
-        entries = [(Self.generalId, "General", "gearshape")] + registry.modules.map { ($0.id, $0.title, $0.icon) }
+        entries = [(Self.generalId, L("General"), "gearshape")] + registry.modules.map { ($0.id, $0.title, $0.icon) }
         sidebar.reloadData()
     }
 
@@ -199,16 +199,16 @@ private final class ModulePage: NSStackView {
         let label = NSTextField(labelWithString: "\(permission.title): \(statusText(status))")
         label.textColor = status == .denied ? .systemOrange : .secondaryLabelColor
         guard status == .denied else { return label }
-        let button = NSButton(title: "Grant…", target: self, action: #selector(grant(_:)))
+        let button = NSButton(title: L("Grant…"), target: self, action: #selector(grant(_:)))
         button.identifier = .init(permission.rawValue)
         return NSStackView(views: [label, button])
     }
 
     private func statusText(_ status: PermissionCenter.Status) -> String {
         switch status {
-        case .granted: return "granted"
-        case .denied: return "required"
-        case .unknown: return "asked on first use"
+        case .granted: return L("granted")
+        case .denied: return L("required")
+        case .unknown: return L("asked on first use")
         }
     }
 
@@ -232,27 +232,28 @@ private final class GeneralPane: NSStackView {
         orientation = .vertical
         alignment = .leading
         spacing = 14
-        let title = NSTextField(labelWithString: "General")
+        let title = NSTextField(labelWithString: L("General"))
         title.font = .systemFont(ofSize: 20, weight: .semibold)
         addArrangedSubview(title)
+        addArrangedSubview(LanguagePicker())
         addArrangedSubview(loginItemCheckbox())
         if SMAppService.mainApp.status == .requiresApproval { addArrangedSubview(loginApprovalRow()) }
-        addArrangedSubview(NSTextField(labelWithString: "Modules"))
+        addArrangedSubview(NSTextField(labelWithString: L("Modules")))
         registry.modules.forEach { addArrangedSubview(moduleCheckbox($0)) }
     }
 
     required init?(coder: NSCoder) { fatalError("programmatic only") }
 
     private func loginItemCheckbox() -> NSButton {
-        let box = NSButton(checkboxWithTitle: "Launch Nexo at login", target: self, action: #selector(toggleLoginItem(_:)))
+        let box = NSButton(checkboxWithTitle: L("Launch Nexo at login"), target: self, action: #selector(toggleLoginItem(_:)))
         box.state = SMAppService.mainApp.status == .enabled ? .on : .off
         return box
     }
 
     private func loginApprovalRow() -> NSView {
-        let label = NSTextField(labelWithString: "Login item needs approval in System Settings.")
+        let label = NSTextField(labelWithString: L("Login item needs approval in System Settings."))
         label.textColor = .systemOrange
-        let button = NSButton(title: "Open Login Items…", target: self, action: #selector(openLoginItems))
+        let button = NSButton(title: L("Open Login Items…"), target: self, action: #selector(openLoginItems))
         return NSStackView(views: [label, button])
     }
 

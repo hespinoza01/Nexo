@@ -7,11 +7,11 @@ enum Metric: String, CaseIterable {
         switch self {
         case .cpu: return "CPU"
         case .gpu: return "GPU"
-        case .memory: return "Memory"
-        case .network: return "Network"
-        case .disk: return "Disk"
-        case .battery: return "Battery"
-        case .temperature: return "Temperature"
+        case .memory: return L("Memory")
+        case .network: return L("Network")
+        case .disk: return L("Disk")
+        case .battery: return L("Battery")
+        case .temperature: return L("Temperature")
         }
     }
 
@@ -19,11 +19,11 @@ enum Metric: String, CaseIterable {
         switch self {
         case .cpu: return "CPU"
         case .gpu: return "GPU"
-        case .memory: return "MEM"
-        case .network: return "NET"
+        case .memory: return L("MEM")
+        case .network: return L("NET")
         case .disk: return "SSD"
-        case .battery: return "BAT"
-        case .temperature: return "TMP"
+        case .battery: return L("BAT")
+        case .temperature: return L("TMP")
         }
     }
 }

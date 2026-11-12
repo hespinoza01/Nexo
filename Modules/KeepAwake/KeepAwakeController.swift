@@ -47,13 +47,13 @@ final class KeepAwakeController {
 
         var title: String {
             switch self {
-            case .minutes15: return "15 minutes"
-            case .minutes30: return "30 minutes"
-            case .hour1: return "1 hour"
-            case .hours2: return "2 hours"
-            case .hours4: return "4 hours"
-            case .hours8: return "8 hours"
-            case .indefinitely: return "Indefinitely"
+            case .minutes15: return L("15 minutes")
+            case .minutes30: return L("30 minutes")
+            case .hour1: return L("1 hour")
+            case .hours2: return L("2 hours")
+            case .hours4: return L("4 hours")
+            case .hours8: return L("8 hours")
+            case .indefinitely: return L("Indefinitely")
             }
         }
 

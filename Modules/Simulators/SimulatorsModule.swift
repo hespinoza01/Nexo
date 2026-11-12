@@ -5,7 +5,7 @@ import Cocoa
 /// background and the menu shows the last known list.
 final class SimulatorsModule: NexoModule {
     static let id = "simulators"
-    let title = "Simulators"
+    var title: String { L("Simulators") }
     let icon = "iphone"
     private(set) var isRunning = false
 
@@ -40,7 +40,7 @@ final class SimulatorsModule: NexoModule {
         refresh()
         let visible = devices.filter { !hiddenRuntimes.contains($0.runtime) && ($0.platform == .ios || showAndroid) }
         guard !visible.isEmpty else {
-            let empty = NSMenuItem(title: devices.isEmpty ? "Loading devices…" : "No devices", action: nil, keyEquivalent: "")
+            let empty = NSMenuItem(title: devices.isEmpty ? L("Loading devices…") : L("No devices"), action: nil, keyEquivalent: "")
             empty.isEnabled = false
             return [empty]
         }
@@ -64,7 +64,7 @@ final class SimulatorsModule: NexoModule {
         sdk.widthAnchor.constraint(equalToConstant: 320).isActive = true
         sdk.target = self
         sdk.action = #selector(sdkChanged(_:))
-        let android = NSButton(checkboxWithTitle: "Show Android emulators", target: self, action: #selector(androidToggled(_:)))
+        let android = NSButton(checkboxWithTitle: L("Show Android emulators"), target: self, action: #selector(androidToggled(_:)))
         android.state = showAndroid ? .on : .off
         let runtimes = Set(devices.map(\.runtime)).sorted(by: >).map { runtime -> NSButton in
             let box = NSButton(checkboxWithTitle: runtime, target: self, action: #selector(runtimeToggled(_:)))
@@ -75,9 +75,9 @@ final class SimulatorsModule: NexoModule {
         return SettingsForm.stack([
             android,
             SettingsForm.row("Android SDK", sdk),
-            SettingsForm.note(AndroidDeviceService.isAvailable ? "Emulator found." : "Emulator not found at \(AndroidDeviceService.sdkPath)/emulator."),
-            SettingsForm.header("Runtimes shown"),
-            SettingsForm.stack(runtimes.isEmpty ? [SettingsForm.note("Open the menu once to load devices.")] : runtimes, spacing: 4),
+            SettingsForm.note(AndroidDeviceService.isAvailable ? L("Emulator found.") : L("Emulator not found at %@/emulator.", AndroidDeviceService.sdkPath)),
+            SettingsForm.header(L("Runtimes shown")),
+            SettingsForm.stack(runtimes.isEmpty ? [SettingsForm.note(L("Open the menu once to load devices."))] : runtimes, spacing: 4),
         ])
     }
 
@@ -95,12 +95,12 @@ final class SimulatorsModule: NexoModule {
     }
 
     private func deviceItem(_ device: SimulatorDevice) -> NSMenuItem {
-        let title = device.isBooted ? "\(device.name) — running" : device.name
+        let title = device.isBooted ? L("%@ — running", device.name) : device.name
         let item = NSMenuItem(title: title, action: #selector(deviceClicked(_:)), keyEquivalent: "")
         item.target = self
         item.representedObject = device.id
         item.state = device.isBooted ? .on : .off
-        item.toolTip = device.isBooted ? "Click to shut down" : "Click to boot"
+        item.toolTip = device.isBooted ? L("Click to shut down") : L("Click to boot")
         return item
     }
 

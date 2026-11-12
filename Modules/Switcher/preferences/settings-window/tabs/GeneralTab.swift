@@ -4,15 +4,12 @@ import UniformTypeIdentifiers
 class GeneralTab {
 
     static func initTab() -> NSView {
-        let language = TableGroupView.Row(leftTitle: NSLocalizedString("Language", comment: ""),
-            rightViews: [LabelAndControl.makeDropdown("language", LanguagePreference.allCases, extraAction: setLanguageCallback)])
         let captureWindowsInBackground = TableGroupView.Row(leftTitle: NSLocalizedString("Capture windows in the background", comment: ""),
             subTitle: NSLocalizedString("When disabled, avoids the macOS purple screen-recording indicator, and avoids flickers when playing DRM video. Thumbnails will be less up-to-date.", comment: ""),
             rightViews: [LabelAndControl.makeSwitch("captureWindowsInBackground")])
         let table = TableGroupView(width: SettingsWindow.contentWidth)
         table.addRow(captureWindowsInBackground)
-        table.addNewTable()
-        table.addRow(language)
+        // Nexo: the language is chosen once for the whole app in Nexo Settings → General.
         let exportButton = NSButton(title: NSLocalizedString("Export settings…", comment: ""), target: nil, action: nil)
         exportButton.onAction = { _ in exportSettings() }
         let importButton = NSButton(title: NSLocalizedString("Import settings…", comment: ""), target: nil, action: nil)

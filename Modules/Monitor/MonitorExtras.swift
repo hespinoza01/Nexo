@@ -84,8 +84,8 @@ final class MonitorAlerter {
     private func evaluatePressure(_ level: MemoryPressure.Level, enabled: Bool) {
         defer { lastPressure = level }
         guard enabled, level.rawValue > lastPressure.rawValue else { return }
-        post("Memory pressure \(MonitorModule.levelName(level))",
-             level == .critical ? "macOS is running out of memory. Close apps you don't need." : "Memory is getting tight; macOS has started compressing and swapping.")
+        post(L("Memory pressure %@", MonitorModule.levelName(level)),
+             level == .critical ? L("macOS is running out of memory. Close apps you don't need.") : L("Memory is getting tight; macOS has started compressing and swapping."))
     }
 
     private func evaluateCPU(_ cpu: Double?, _ alerts: MonitorAlerts) {
@@ -98,7 +98,7 @@ final class MonitorAlerter {
         cpuHighSince = since
         guard !cpuNotified, now().timeIntervalSince(since) >= alerts.cpuSeconds else { return }
         cpuNotified = true
-        post("High CPU usage", "CPU has been above \(MonitorFormat.percent(alerts.cpuThreshold)) for \(Int(alerts.cpuSeconds)) s.")
+        post(L("High CPU usage"), L("CPU has been above %@ for %d s.", MonitorFormat.percent(alerts.cpuThreshold), Int(alerts.cpuSeconds)))
     }
 
     private func evaluateDisk(_ disk: (free: Int64, total: Int64)?, _ alerts: MonitorAlerts) {
@@ -111,7 +111,7 @@ final class MonitorAlerter {
         }
         guard !diskNotified else { return }
         diskNotified = true
-        post("Disk almost full", "Only \(MonitorFormat.bytes(UInt64(disk.free))) free on the startup disk.")
+        post(L("Disk almost full"), L("Only %@ free on the startup disk.", MonitorFormat.bytes(UInt64(disk.free))))
     }
 
     private static func deliver(_ title: String, _ body: String) {

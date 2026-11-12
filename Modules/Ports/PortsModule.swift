@@ -48,7 +48,7 @@ enum PortScanner {
 /// List listening ports and stop the process behind one (dev servers, databases, stuck daemons).
 final class PortsModule: NexoModule {
     static let id = "ports"
-    let title = "Port Manager"
+    var title: String { L("Port Manager") }
     let icon = "network"
     private(set) var isRunning = false
     private var ports = [ListeningPort]()
@@ -65,10 +65,10 @@ final class PortsModule: NexoModule {
 
     func menuItems() -> [NSMenuItem] {
         refresh()
-        let item = NSMenuItem(title: "Listening Ports (\(ports.count))", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: L("Listening Ports (%d)", ports.count), action: nil, keyEquivalent: "")
         let submenu = NSMenu()
         if ports.isEmpty {
-            let empty = NSMenuItem(title: scanning ? "Scanning…" : "None", action: nil, keyEquivalent: "")
+            let empty = NSMenuItem(title: scanning ? L("Scanning…") : L("None"), action: nil, keyEquivalent: "")
             empty.isEnabled = false
             submenu.addItem(empty)
         }
@@ -79,7 +79,7 @@ final class PortsModule: NexoModule {
 
     func settingsView() -> NSView {
         SettingsForm.stack([
-            SettingsForm.note("Lists TCP ports in LISTEN state from `lsof`. “Quit” sends SIGTERM; “Force Kill” sends SIGKILL after confirmation. Processes owned by other users (root daemons) can't be stopped from here."),
+            SettingsForm.note(L("Lists TCP ports in LISTEN state from `lsof`. “Quit” sends SIGTERM; “Force Kill” sends SIGKILL after confirmation. Processes owned by other users (root daemons) can't be stopped from here.")),
         ])
     }
 
@@ -97,15 +97,15 @@ final class PortsModule: NexoModule {
 
     private func portItem(_ port: ListeningPort) -> NSMenuItem {
         let item = NSMenuItem(title: "\(port.port) — \(port.command) (pid \(port.pid))", action: nil, keyEquivalent: "")
-        item.toolTip = "Listening on \(port.address):\(port.port)"
+        item.toolTip = L("Listening on %@:%d", port.address, port.port)
         let actions = NSMenu()
-        for (title, signal) in [("Quit (SIGTERM)", SIGTERM), ("Force Kill (SIGKILL)…", SIGKILL)] {
+        for (title, signal) in [(L("Quit (SIGTERM)"), SIGTERM), (L("Force Kill (SIGKILL)…"), SIGKILL)] {
             let action = NSMenuItem(title: title, action: #selector(stopProcess(_:)), keyEquivalent: "")
             action.target = self
             action.representedObject = ["port": port, "signal": signal] as [String: Any]
             actions.addItem(action)
         }
-        let copy = NSMenuItem(title: "Copy http://localhost:\(port.port)", action: #selector(copyURL(_:)), keyEquivalent: "")
+        let copy = NSMenuItem(title: L("Copy http://localhost:%d", port.port), action: #selector(copyURL(_:)), keyEquivalent: "")
         copy.target = self
         copy.representedObject = port.port
         actions.addItem(.separator())
@@ -121,7 +121,7 @@ final class PortsModule: NexoModule {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard PortScanner.stillListening(port) else {
                 DispatchQueue.main.async {
-                    self?.showError("Port \(port.port) is no longer held by \(port.command) (pid \(port.pid)). Nothing was stopped.")
+                    self?.showError(L("Port %d is no longer held by %@ (pid %d). Nothing was stopped.", port.port, port.command, port.pid))
                     self?.refresh()
                 }
                 return
@@ -129,7 +129,7 @@ final class PortsModule: NexoModule {
             let result = kill(port.pid, signal)
             let error = errno
             DispatchQueue.main.async {
-                if result != 0 { self?.showError("Couldn't stop \(port.command) (pid \(port.pid)): \(String(cString: strerror(error)))") }
+                if result != 0 { self?.showError(L("Couldn't stop %@ (pid %d): %@", port.command, port.pid, String(cString: strerror(error)))) }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self?.refresh() }
             }
         }
@@ -144,10 +144,10 @@ final class PortsModule: NexoModule {
 
     private func confirmForceKill(_ port: ListeningPort) -> Bool {
         let alert = NSAlert()
-        alert.messageText = "Force kill \(port.command) (pid \(port.pid)) on port \(port.port)?"
-        alert.informativeText = "The process won't get a chance to save its state."
-        alert.addButton(withTitle: "Force Kill").hasDestructiveAction = true
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = L("Force kill %@ (pid %d) on port %d?", port.command, port.pid, port.port)
+        alert.informativeText = L("The process won't get a chance to save its state.")
+        alert.addButton(withTitle: L("Force Kill")).hasDestructiveAction = true
+        alert.addButton(withTitle: L("Cancel"))
         NSApp.activate()
         return alert.runModal() == .alertFirstButtonReturn
     }

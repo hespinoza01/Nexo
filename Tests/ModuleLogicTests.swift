@@ -385,10 +385,10 @@ final class MonitorExtrasTests: XCTestCase {
         sample.pressure = MemoryPressure(level: .warning, percent: 40)
         alerter.evaluate(sample, alerts)
         alerter.evaluate(sample, alerts)
-        XCTAssertEqual(posted, ["Memory pressure warning"])
+        XCTAssertEqual(posted, [L("Memory pressure %@", L("warning"))])
         sample.pressure = MemoryPressure(level: .critical, percent: 80)
         alerter.evaluate(sample, alerts)
-        XCTAssertEqual(posted.last, "Memory pressure critical")
+        XCTAssertEqual(posted.last, L("Memory pressure %@", L("critical")))
 
         posted.removeAll()
         sample.pressure = MemoryPressure(level: .normal, percent: 10)
@@ -400,14 +400,14 @@ final class MonitorExtrasTests: XCTestCase {
         now = now.addingTimeInterval(2)
         alerter.evaluate(sample, alerts)
         alerter.evaluate(sample, alerts)
-        XCTAssertEqual(posted, ["High CPU usage"])
+        XCTAssertEqual(posted, [L("High CPU usage")])
         sample.cpuLoad = CPULoad(total: 0.1, user: 0.1, system: 0, idle: 0.9, perCore: [])
         alerter.evaluate(sample, alerts)
         sample.cpuLoad = CPULoad(total: 0.95, user: 0.95, system: 0, idle: 0.05, perCore: [])
         alerter.evaluate(sample, alerts)
         now = now.addingTimeInterval(31)
         alerter.evaluate(sample, alerts)
-        XCTAssertEqual(posted, ["High CPU usage", "High CPU usage"], "re-armed after dropping below the threshold")
+        XCTAssertEqual(posted, [L("High CPU usage"), L("High CPU usage")], "re-armed after dropping below the threshold")
     }
 
     func testLowDiskAlertHasHysteresis() {

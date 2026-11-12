@@ -15,8 +15,8 @@ final class ThemeEditorSheet: SheetWindow {
         presetPopUp.target = self
         presetPopUp.action = #selector(presetChosen(_:))
         let presetButtons = NSStackView(views: [
-            button("Save As…", #selector(saveAs)), button("Rename…", #selector(renamePreset)), button("Delete", #selector(deletePreset)),
-            button("Import…", #selector(importPreset)), button("Export…", #selector(exportPreset)),
+            button(NSLocalizedString("Save As…", comment: ""), #selector(saveAs)), button(NSLocalizedString("Rename…", comment: ""), #selector(renamePreset)), button(NSLocalizedString("Delete", comment: ""), #selector(deletePreset)),
+            button(NSLocalizedString("Import…", comment: ""), #selector(importPreset)), button(NSLocalizedString("Export…", comment: ""), #selector(exportPreset)),
         ])
         presetButtons.spacing = 6
         preview.translatesAutoresizingMaskIntoConstraints = false
@@ -26,7 +26,7 @@ final class ThemeEditorSheet: SheetWindow {
         form.columnSpacing = 10
         form.rowSpacing = 6
         form.column(at: 0).xPlacement = .trailing
-        let stack = NSStackView(views: [SettingsForm.row("Preset", presetPopUp), presetButtons, preview, form])
+        let stack = NSStackView(views: [SettingsForm.row(NSLocalizedString("Preset", comment: ""), presetPopUp), presetButtons, preview, form])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 12
@@ -38,20 +38,20 @@ final class ThemeEditorSheet: SheetWindow {
 
     private func rows() -> [[NSView]] {
         [
-            ["Panel tint", colorRow(\.tintColor)],
-            ["Text color", colorRow(\.textColor)],
-            ["Selection color", colorRow(\.highlightColor)],
-            ["Border color", colorRow(\.borderColor)],
-            ["Material", materialPopUp()],
-            ["Panel corner radius", slider(\.panelCornerRadius, 0...40)],
-            ["Tile corner radius", slider(\.tileCornerRadius, 0...30)],
-            ["Panel padding", slider(\.panelPadding, 0...40)],
-            ["Border width", slider(\.borderWidth, 0...6)],
-            ["Selection border", slider(\.highlightBorderWidth, 0...6)],
-            ["Icon size ×", slider(\.iconScale, 0.5...1.5)],
-            ["Font size", slider(\.fontSize, 9...20)],
-            ["Show animation", animationPopUp(\.showAnimation)],
-            ["Hide animation", animationPopUp(\.hideAnimation)],
+            [NSLocalizedString("Panel tint", comment: ""), colorRow(\.tintColor)],
+            [NSLocalizedString("Text color", comment: ""), colorRow(\.textColor)],
+            [NSLocalizedString("Selection color", comment: ""), colorRow(\.highlightColor)],
+            [NSLocalizedString("Border color", comment: ""), colorRow(\.borderColor)],
+            [NSLocalizedString("Material", comment: ""), materialPopUp()],
+            [NSLocalizedString("Panel corner radius", comment: ""), slider(\.panelCornerRadius, 0...40)],
+            [NSLocalizedString("Tile corner radius", comment: ""), slider(\.tileCornerRadius, 0...30)],
+            [NSLocalizedString("Panel padding", comment: ""), slider(\.panelPadding, 0...40)],
+            [NSLocalizedString("Border width", comment: ""), slider(\.borderWidth, 0...6)],
+            [NSLocalizedString("Selection border", comment: ""), slider(\.highlightBorderWidth, 0...6)],
+            [NSLocalizedString("Icon size ×", comment: ""), slider(\.iconScale, 0.5...1.5)],
+            [NSLocalizedString("Font size", comment: ""), slider(\.fontSize, 9...20)],
+            [NSLocalizedString("Show animation", comment: ""), animationPopUp(\.showAnimation)],
+            [NSLocalizedString("Hide animation", comment: ""), animationPopUp(\.hideAnimation)],
         ].map { [NSTextField(labelWithString: $0[0] as! String), $0[1] as! NSView] }
     }
 
@@ -59,7 +59,7 @@ final class ThemeEditorSheet: SheetWindow {
     private func colorRow(_ keyPath: WritableKeyPath<SwitcherTheme, String?>) -> NSView {
         let well = NSColorWell(style: .minimal)
         well.color = NSColor(hex: theme[keyPath: keyPath]) ?? .systemAccentColor
-        let useDefault = NSButton(checkboxWithTitle: "Default", target: nil, action: nil)
+        let useDefault = NSButton(checkboxWithTitle: NSLocalizedString("Default", comment: ""), target: nil, action: nil)
         useDefault.state = theme[keyPath: keyPath] == nil ? .on : .off
         well.isEnabled = useDefault.state == .off
         let apply = { [weak self, weak well, weak useDefault] in
@@ -79,7 +79,7 @@ final class ThemeEditorSheet: SheetWindow {
         let value = NSTextField(labelWithString: "")
         value.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
         value.widthAnchor.constraint(equalToConstant: 34).isActive = true
-        let useDefault = NSButton(checkboxWithTitle: "Default", target: nil, action: nil)
+        let useDefault = NSButton(checkboxWithTitle: NSLocalizedString("Default", comment: ""), target: nil, action: nil)
         useDefault.state = theme[keyPath: keyPath] == nil ? .on : .off
         slider.isEnabled = useDefault.state == .off
         let format = { range.upperBound <= 2 ? String(format: "%.2f", slider.doubleValue) : "\(Int(slider.doubleValue))" }
@@ -97,7 +97,7 @@ final class ThemeEditorSheet: SheetWindow {
 
     private func materialPopUp() -> NSView {
         let popUp = NSPopUpButton()
-        popUp.addItem(withTitle: "Default")
+        popUp.addItem(withTitle: NSLocalizedString("Default", comment: ""))
         SwitcherTheme.Material.allCases.forEach { popUp.addItem(withTitle: $0.title) }
         popUp.selectItem(at: theme.material.flatMap { SwitcherTheme.Material.allCases.firstIndex(of: $0) }.map { $0 + 1 } ?? 0)
         popUp.onAction = { [weak self] control in
@@ -109,7 +109,7 @@ final class ThemeEditorSheet: SheetWindow {
 
     private func animationPopUp(_ keyPath: WritableKeyPath<SwitcherTheme, SwitcherTheme.Animation?>) -> NSView {
         let popUp = NSPopUpButton()
-        popUp.addItem(withTitle: "Default")
+        popUp.addItem(withTitle: NSLocalizedString("Default", comment: ""))
         SwitcherTheme.Animation.allCases.forEach { popUp.addItem(withTitle: $0.title) }
         popUp.selectItem(at: theme[keyPath: keyPath].flatMap { SwitcherTheme.Animation.allCases.firstIndex(of: $0) }.map { $0 + 1 } ?? 0)
         popUp.onAction = { [weak self] control in
@@ -144,13 +144,19 @@ final class ThemeEditorSheet: SheetWindow {
         presetPopUp.removeAllItems()
         var names = store.allPresetNames
         if !names.contains(store.activeName) { names.insert(store.activeName, at: 0) }
-        presetPopUp.addItems(withTitles: names)
-        presetPopUp.selectItem(withTitle: store.activeName)
+        // Factory names (and "Custom") are stored in English and localized only for display; the raw
+        // name rides along as representedObject.
+        names.forEach { name in
+            let item = NSMenuItem(title: store.isFactory(name) || name == "Custom" ? NSLocalizedString(name, comment: "") : name, action: nil, keyEquivalent: "")
+            item.representedObject = name
+            presetPopUp.menu?.addItem(item)
+        }
+        presetPopUp.selectItem(at: names.firstIndex(of: store.activeName) ?? -1)
     }
 
     /// Switching preset rebuilds the form so every control shows the preset's values.
     @objc private func presetChosen(_ sender: NSPopUpButton) {
-        guard let name = sender.titleOfSelectedItem, let preset = store.preset(named: name) else { return }
+        guard let name = sender.selectedItem?.representedObject as? String, let preset = store.preset(named: name) else { return }
         theme = preset
         store.setActive(preset, name: name)
         App.resetPreferencesDependentComponents()
@@ -158,22 +164,22 @@ final class ThemeEditorSheet: SheetWindow {
     }
 
     @objc private func saveAs() {
-        guard let name = ask("Save style as", defaultValue: store.isFactory(store.activeName) ? "" : store.activeName) else { return }
-        guard store.save(theme, as: name) else { return alert("“\(name)” can't be used (built-in presets are read-only).") }
+        guard let name = ask(NSLocalizedString("Save style as", comment: ""), defaultValue: store.isFactory(store.activeName) ? "" : store.activeName) else { return }
+        guard store.save(theme, as: name) else { return alert(String(format: NSLocalizedString("“%@” can't be used (built-in presets are read-only).", comment: ""), name)) }
         store.setActive(theme, name: ThemeStore.sanitize(name))
         reloadPresets()
     }
 
     @objc private func renamePreset() {
         let current = store.activeName
-        guard !store.isFactory(current), store.userPresetNames.contains(current) else { return alert("Only saved presets can be renamed.") }
-        guard let name = ask("Rename “\(current)” to", defaultValue: current), store.rename(current, to: name) else { return }
+        guard !store.isFactory(current), store.userPresetNames.contains(current) else { return alert(NSLocalizedString("Only saved presets can be renamed.", comment: "")) }
+        guard let name = ask(String(format: NSLocalizedString("Rename “%@” to", comment: ""), current), defaultValue: current), store.rename(current, to: name) else { return }
         reloadPresets()
     }
 
     @objc private func deletePreset() {
         let current = store.activeName
-        guard store.userPresetNames.contains(current) else { return alert("Built-in presets can't be deleted.") }
+        guard store.userPresetNames.contains(current) else { return alert(NSLocalizedString("Built-in presets can't be deleted.", comment: "")) }
         store.delete(current)
         store.setActive(.stock, name: "Default")
         theme = .stock
@@ -194,7 +200,7 @@ final class ThemeEditorSheet: SheetWindow {
             App.resetPreferencesDependentComponents()
             rebuild()
         } catch {
-            alert("That file isn't a Nexo style: \(error.localizedDescription)")
+            alert(String(format: NSLocalizedString("That file isn't a Nexo style: %@", comment: ""), error.localizedDescription))
         }
     }
 
@@ -216,8 +222,8 @@ final class ThemeEditorSheet: SheetWindow {
         let field = NSTextField(string: defaultValue)
         field.frame = NSRect(x: 0, y: 0, width: 240, height: 24)
         alert.accessoryView = field
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: NSLocalizedString("OK", comment: ""))
+        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: ""))
         alert.window.initialFirstResponder = field
         guard alert.runModal() == .alertFirstButtonReturn else { return nil }
         let value = field.stringValue.trimmingCharacters(in: .whitespaces)
@@ -276,7 +282,7 @@ final class ThemePreviewView: NSView {
         NSBezierPath(roundedRect: NSRect(x: rect.midX - icon / 2, y: rect.midY - icon / 2 + 8, width: icon, height: icon), xRadius: 7, yRadius: 7).fill()
         let textColor = NSColor(hex: theme.textColor) ?? (isLight ? NSColor.black.withAlphaComponent(0.8) : NSColor.white.withAlphaComponent(0.85))
         let font = NSFont.systemFont(ofSize: theme.fontSize ?? 12, weight: .medium)
-        let title = "Window" as NSString
+        let title = NSLocalizedString("Window", comment: "") as NSString
         let size = title.size(withAttributes: [.font: font])
         title.draw(at: NSPoint(x: rect.midX - size.width / 2, y: rect.minY + 6), withAttributes: [.font: font, .foregroundColor: textColor])
     }

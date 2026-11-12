@@ -4,7 +4,7 @@ import ShortcutRecorder
 /// Keep the Mac (and optionally the display) from sleeping, from the menu bar or a global shortcut.
 final class KeepAwakeModule: NexoModule {
     static let id = "keepAwake"
-    let title = "Keep Awake"
+    var title: String { L("Keep Awake") }
     let icon = "cup.and.saucer"
     private(set) var isRunning = false
 
@@ -142,7 +142,7 @@ final class KeepAwakeModule: NexoModule {
         let toggleItem = NSMenuItem(title: toggleTitle(), action: #selector(toggleFromMenu), keyEquivalent: "")
         toggleItem.target = self
         toggleItem.state = controller.isActive ? .on : .off
-        let timed = NSMenuItem(title: "Keep Awake for", action: nil, keyEquivalent: "")
+        let timed = NSMenuItem(title: L("Keep Awake for"), action: nil, keyEquivalent: "")
         timed.submenu = durationsMenu()
         return [toggleItem, timed]
     }
@@ -156,18 +156,19 @@ final class KeepAwakeModule: NexoModule {
             menu.addItem(item)
         }
         menu.addItem(.separator())
-        let display = NSMenuItem(title: "Keep display on", action: #selector(toggleDisplayFromMenu), keyEquivalent: "")
+        let display = NSMenuItem(title: L("Keep display on"), action: #selector(toggleDisplayFromMenu), keyEquivalent: "")
         display.target = self
         display.state = keepDisplayAwake ? .on : .off
         menu.addItem(display)
         return menu
     }
 
-    private func toggleTitle() -> String {
-        guard controller.isActive else { return "Keep Awake" }
-        if controller.isPaused { return "Keep Awake (paused while locked)" }
-        guard let remaining = controller.remaining else { return "Keep Awake (on)" }
-        return "Keep Awake (\(Self.format(remaining)) left)"
+    /// `status` gives the settings page's wording ("Active …") instead of the menu's ("Keep Awake …").
+    private func toggleTitle(status: Bool = false) -> String {
+        guard controller.isActive else { return L("Keep Awake") }
+        if controller.isPaused { return status ? L("Active (paused while locked)") : L("Keep Awake (paused while locked)") }
+        guard let remaining = controller.remaining else { return status ? L("Active (on)") : L("Keep Awake (on)") }
+        return status ? L("Active (%@ left)", Self.format(remaining)) : L("Keep Awake (%@ left)", Self.format(remaining))
     }
 
     // MARK: Settings
@@ -179,7 +180,7 @@ final class KeepAwakeModule: NexoModule {
         toggleButton = toggle
         refreshSettingsStatus()
 
-        let display = NSButton(checkboxWithTitle: "Keep the display on (otherwise only the Mac stays awake)", target: self, action: #selector(displayChanged(_:)))
+        let display = NSButton(checkboxWithTitle: L("Keep the display on (otherwise only the Mac stays awake)"), target: self, action: #selector(displayChanged(_:)))
         display.state = keepDisplayAwake ? .on : .off
         let duration = NSPopUpButton()
         KeepAwakeController.Duration.allCases.forEach { duration.addItem(withTitle: $0.title) }
@@ -187,32 +188,32 @@ final class KeepAwakeModule: NexoModule {
         duration.target = self
         duration.action = #selector(durationChanged(_:))
         let activity = NSPopUpButton()
-        Self.activityChoices.forEach { activity.addItem(withTitle: $0 == 0 ? "Off" : "Every \($0) min") }
+        Self.activityChoices.forEach { activity.addItem(withTitle: $0 == 0 ? L("Off") : L("Every %d min", $0)) }
         activity.selectItem(at: Self.activityChoices.firstIndex(of: activityMinutes) ?? 0)
         activity.target = self
         activity.action = #selector(activityChanged(_:))
-        let launch = NSButton(checkboxWithTitle: "Start keeping awake when Nexo launches", target: self, action: #selector(launchChanged(_:)))
+        let launch = NSButton(checkboxWithTitle: L("Start keeping awake when Nexo launches"), target: self, action: #selector(launchChanged(_:)))
         launch.state = startOnLaunch ? .on : .off
-        let lock = NSButton(checkboxWithTitle: "Pause while the screen is locked", target: self, action: #selector(lockChanged(_:)))
+        let lock = NSButton(checkboxWithTitle: L("Pause while the screen is locked"), target: self, action: #selector(lockChanged(_:)))
         lock.state = pauseWhenLocked ? .on : .off
         let shortcut = HotKeyField(key: Key.shortcut) { [weak self] in self?.hotKey.register($0) }
         return SettingsForm.stack([
             NSStackView(views: [toggle, status]),
             display,
-            SettingsForm.row("Default duration", duration),
-            SettingsForm.row("Simulate activity", activity),
-            SettingsForm.note("Simulated activity tells macOS the user is present, so the screen saver, the idle lock and “away” status in chat apps don’t kick in."),
+            SettingsForm.row(L("Default duration"), duration),
+            SettingsForm.row(L("Simulate activity"), activity),
+            SettingsForm.note(L("Simulated activity tells macOS the user is present, so the screen saver, the idle lock and “away” status in chat apps don’t kick in.")),
             launch,
             lock,
-            SettingsForm.row("Toggle shortcut", shortcut),
-            SettingsForm.note("A session stays on across quits, restarts and shutdowns until you turn it off (or its time runs out); Nexo resumes it when it launches, so keep “Launch Nexo at login” on in General."),
-            SettingsForm.note("Active assertions are listed by `pmset -g assertions` as “\(KeepAwakeController.reason)”. Closing the lid still sleeps the Mac unless an external display is connected."),
+            SettingsForm.row(L("Toggle shortcut"), shortcut),
+            SettingsForm.note(L("A session stays on across quits, restarts and shutdowns until you turn it off (or its time runs out); Nexo resumes it when it launches, so keep “Launch Nexo at login” on in General.")),
+            SettingsForm.note(L("Active assertions are listed by `pmset -g assertions` as “%@”. Closing the lid still sleeps the Mac unless an external display is connected.", KeepAwakeController.reason)),
         ])
     }
 
     private func refreshSettingsStatus() {
-        toggleButton?.title = controller.isActive ? "Turn Off" : "Turn On"
-        statusLabel?.stringValue = controller.isActive ? toggleTitle().replacingOccurrences(of: "Keep Awake", with: "Active") : "Inactive"
+        toggleButton?.title = controller.isActive ? L("Turn Off") : L("Turn On")
+        statusLabel?.stringValue = controller.isActive ? toggleTitle(status: true) : L("Inactive")
         statusLabel?.textColor = controller.isActive ? .systemGreen : .secondaryLabelColor
     }
 

@@ -8,12 +8,12 @@ struct SwitcherTheme: Codable, Equatable {
 
         var title: String {
             switch self {
-            case .dark: return "Dark"
-            case .light: return "Light"
-            case .ultraDark: return "Ultra dark"
-            case .hud: return "HUD"
-            case .sidebar: return "Sidebar"
-            case .menu: return "Menu"
+            case .dark: return NSLocalizedString("Dark", comment: "")
+            case .light: return NSLocalizedString("Light", comment: "")
+            case .ultraDark: return NSLocalizedString("Ultra dark", comment: "")
+            case .hud: return NSLocalizedString("HUD", comment: "")
+            case .sidebar: return NSLocalizedString("Sidebar", comment: "")
+            case .menu: return NSLocalizedString("Menu", comment: "")
             }
         }
 
@@ -34,10 +34,10 @@ struct SwitcherTheme: Codable, Equatable {
 
         var title: String {
             switch self {
-            case .none: return "None"
-            case .fade: return "Fade"
-            case .quickFade: return "Quick fade"
-            case .slowFade: return "Slow fade"
+            case .none: return NSLocalizedString("None", comment: "")
+            case .fade: return NSLocalizedString("Fade", comment: "")
+            case .quickFade: return NSLocalizedString("Quick fade", comment: "")
+            case .slowFade: return NSLocalizedString("Slow fade", comment: "")
             }
         }
 

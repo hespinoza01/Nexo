@@ -6,7 +6,7 @@ import ShortcutRecorder
 /// frontmost when the panel opened.
 final class ClipboardModule: NexoModule {
     static let id = "clipboard"
-    let title = "Clipboard History"
+    var title: String { L("Clipboard History") }
     let icon = "doc.on.clipboard"
     let permissions: [ModulePermission] = [.accessibility]
     private(set) var isRunning = false
@@ -50,9 +50,9 @@ final class ClipboardModule: NexoModule {
     }
 
     func menuItems() -> [NSMenuItem] {
-        let open = NSMenuItem(title: "Clipboard History…", action: #selector(openFromMenu), keyEquivalent: "")
+        let open = NSMenuItem(title: L("Clipboard History…"), action: #selector(openFromMenu), keyEquivalent: "")
         open.target = self
-        let recent = NSMenuItem(title: "Recent", action: nil, keyEquivalent: "")
+        let recent = NSMenuItem(title: L("Recent"), action: nil, keyEquivalent: "")
         let submenu = NSMenu()
         for (index, entry) in history.entries.prefix(10).enumerated() {
             let item = NSMenuItem(title: Self.preview(entry.text, length: 50), action: #selector(copyRecent(_:)), keyEquivalent: "")
@@ -60,7 +60,7 @@ final class ClipboardModule: NexoModule {
             item.tag = index
             submenu.addItem(item)
         }
-        if history.entries.isEmpty { submenu.addItem(withTitle: "Empty", action: nil, keyEquivalent: "").isEnabled = false }
+        if history.entries.isEmpty { submenu.addItem(withTitle: L("Empty"), action: nil, keyEquivalent: "").isEnabled = false }
         recent.submenu = submenu
         return [open, recent]
     }
@@ -71,17 +71,17 @@ final class ClipboardModule: NexoModule {
         excluded.widthAnchor.constraint(equalToConstant: 380).isActive = true
         excluded.target = self
         excluded.action = #selector(excludedChanged(_:))
-        let clear = NSButton(title: "Clear History", target: self, action: #selector(clearHistory))
+        let clear = NSButton(title: L("Clear History"), target: self, action: #selector(clearHistory))
         let limit = NSPopUpButton()
-        ClipboardHistory.limitChoices.forEach { limit.addItem(withTitle: "\($0) items") }
+        ClipboardHistory.limitChoices.forEach { limit.addItem(withTitle: L("%d items", $0)) }
         limit.selectItem(at: ClipboardHistory.limitChoices.firstIndex(of: historyLimit) ?? 2)
         limit.target = self
         limit.action = #selector(limitChanged(_:))
         return SettingsForm.stack([
-            SettingsForm.row("Open panel", shortcut),
-            SettingsForm.row("Ignore copies from (bundle ids)", excluded),
-            SettingsForm.row("Keep", limit),
-            SettingsForm.note("Keeps the last text copies in ~/Library/Application Support/Nexo/clipboard.json (owner-only permissions). Items password managers mark as concealed or transient are never stored; text copied from a plain browser password field has no such mark and is stored."),
+            SettingsForm.row(L("Open panel"), shortcut),
+            SettingsForm.row(L("Ignore copies from (bundle ids)"), excluded),
+            SettingsForm.row(L("Keep"), limit),
+            SettingsForm.note(L("Keeps the last text copies in ~/Library/Application Support/Nexo/clipboard.json (owner-only permissions). Items password managers mark as concealed or transient are never stored; text copied from a plain browser password field has no such mark and is stored.")),
             clear,
         ])
     }
@@ -247,7 +247,7 @@ final class ClipboardPanel: NSPanel, NSTableViewDataSource, NSTableViewDelegate,
     }
 
     private func buildLayout() {
-        search.placeholderString = "Search clipboard history"
+        search.placeholderString = L("Search clipboard history")
         search.delegate = self
         table.addTableColumn(NSTableColumn(identifier: .init("entry")))
         table.headerView = nil

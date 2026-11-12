@@ -8,7 +8,7 @@ import SwiftUI
 /// Everything visual is configurable through `MonitorAppearance` (see `MonitorSettingsView`).
 final class MonitorModule: NexoModule {
     static let id = "monitor"
-    let title = "System Monitor"
+    let title = L("System Monitor")
     let icon = "gauge.with.dots.needle.33percent"
     private(set) var isRunning = false
 
@@ -64,7 +64,7 @@ final class MonitorModule: NexoModule {
 
     func menuItems() -> [NSMenuItem] {
         let sample = sampler.latest
-        var lines = ["Memory pressure: \(sample.pressure.percent.map { "\($0)%" } ?? "–") (\(Self.levelName(sample.pressure.level)))"]
+        var lines = [L("Memory pressure: %@ (%@)", sample.pressure.percent.map { "\($0)%" } ?? "–", Self.levelName(sample.pressure.level))]
         if let cpu = sample.cpu { lines.append("CPU: \(MonitorFormat.percent(cpu))") }
         return lines.map {
             let item = NSMenuItem(title: $0, action: nil, keyEquivalent: "")
@@ -89,9 +89,9 @@ final class MonitorModule: NexoModule {
 
     static func levelName(_ level: MemoryPressure.Level) -> String {
         switch level {
-        case .normal: return "normal"
-        case .warning: return "warning"
-        case .critical: return "critical"
+        case .normal: return L("normal")
+        case .warning: return L("warning")
+        case .critical: return L("critical")
         }
     }
 

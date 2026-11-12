@@ -6,7 +6,7 @@ import Cocoa
 /// heavy launch runs once per process, on the first `start()`.
 final class SwitcherModule: NexoModule {
     static let id = "switcher"
-    let title = "Window Switcher"
+    var title: String { L("Window Switcher") }
     let icon = "rectangle.on.rectangle"
     let permissions: [ModulePermission] = [.accessibility, .screenRecording]
     private(set) var isRunning = false
@@ -51,8 +51,8 @@ final class SwitcherModule: NexoModule {
     func settingsView() -> NSView {
         guard isRunning, let window = App.settingsWindowForEmbedding() else {
             return NSTextField(wrappingLabelWithString: isRunning
-                ? "The window switcher is still starting (it waits for Accessibility and Screen Recording). Come back in a moment."
-                : "Enable the module to configure the window switcher.")
+                ? L("The window switcher is still starting (it waits for Accessibility and Screen Recording). Come back in a moment.")
+                : L("Enable the module to configure the window switcher."))
         }
         return SwitcherSettingsPane(window: window, host: NexoCore.settingsHostWindow)
     }
@@ -74,7 +74,7 @@ private final class SwitcherSettingsPane: NSView, NSSearchFieldDelegate {
         picker.target = self
         picker.action = #selector(pick(_:))
         picker.selectedSegment = 0
-        search.placeholderString = "Search switcher settings"
+        search.placeholderString = L("Search switcher settings")
         search.delegate = self
         search.sendsSearchStringImmediately = true
         let content = window.embeddedContent(host: host)

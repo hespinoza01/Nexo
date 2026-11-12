@@ -6,7 +6,7 @@ import Carbon.HIToolbox
 /// the keys are still down after the hold duration.
 final class QuitProtectionModule: NexoModule {
     static let id = "quitProtection"
-    let title = "Quit Protection"
+    var title: String { L("Quit Protection") }
     let icon = "shield.lefthalf.filled"
     let permissions: [ModulePermission] = [.accessibility]
     private(set) var isRunning = false
@@ -65,9 +65,9 @@ final class QuitProtectionModule: NexoModule {
         list.target = self
         list.action = #selector(exclusionsChanged(_:))
         return SettingsForm.stack([
-            SettingsForm.row("Hold ⌘Q for", hold),
-            SettingsForm.row("Never protect (bundle ids)", list),
-            SettingsForm.note(tap == nil && isRunning ? "⚠︎ Needs Accessibility permission; grant it and toggle the module." : "Press ⌘Q once to see the hint; keep holding to quit."),
+            SettingsForm.row(L("Hold ⌘Q for"), hold),
+            SettingsForm.row(L("Never protect (bundle ids)"), list),
+            SettingsForm.note(tap == nil && isRunning ? L("⚠︎ Needs Accessibility permission; grant it and toggle the module.") : L("Press ⌘Q once to see the hint; keep holding to quit.")),
         ])
     }
 
@@ -128,7 +128,7 @@ final class QuitProtectionModule: NexoModule {
     private func begin() {
         pressStart = Date()
         let app = NSWorkspace.shared.frontmostApplication
-        hint.show("Hold ⌘Q to quit \(app?.localizedName ?? "")", duration: holdSeconds)
+        hint.show(L("Hold ⌘Q to quit %@", app?.localizedName ?? ""), duration: holdSeconds)
         let work = DispatchWorkItem { [weak self] in
             self?.cancel()
             // Only quit if ⌘Q is physically still down: the release events may never have reached the tap.

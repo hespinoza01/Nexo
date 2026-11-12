@@ -10,24 +10,24 @@ enum SnapAction: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .leftHalf: return "Left Half"
-        case .rightHalf: return "Right Half"
-        case .topHalf: return "Top Half"
-        case .bottomHalf: return "Bottom Half"
-        case .firstThird: return "First Third"
-        case .centerThird: return "Center Third"
-        case .lastThird: return "Last Third"
-        case .firstTwoThirds: return "First Two Thirds"
-        case .lastTwoThirds: return "Last Two Thirds"
-        case .topLeft: return "Top Left"
-        case .topRight: return "Top Right"
-        case .bottomLeft: return "Bottom Left"
-        case .bottomRight: return "Bottom Right"
-        case .maximize: return "Maximize"
-        case .almostMaximize: return "Almost Maximize"
-        case .center: return "Center"
-        case .nextDisplay: return "Next Display"
-        case .previousDisplay: return "Previous Display"
+        case .leftHalf: return L("Left Half")
+        case .rightHalf: return L("Right Half")
+        case .topHalf: return L("Top Half")
+        case .bottomHalf: return L("Bottom Half")
+        case .firstThird: return L("First Third")
+        case .centerThird: return L("Center Third")
+        case .lastThird: return L("Last Third")
+        case .firstTwoThirds: return L("First Two Thirds")
+        case .lastTwoThirds: return L("Last Two Thirds")
+        case .topLeft: return L("Top Left")
+        case .topRight: return L("Top Right")
+        case .bottomLeft: return L("Bottom Left")
+        case .bottomRight: return L("Bottom Right")
+        case .maximize: return L("Maximize")
+        case .almostMaximize: return L("Almost Maximize")
+        case .center: return L("Center")
+        case .nextDisplay: return L("Next Display")
+        case .previousDisplay: return L("Previous Display")
         }
     }
 

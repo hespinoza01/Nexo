@@ -11,11 +11,9 @@ class AboutTab {
             BoldLabel(NSLocalizedString("Window switcher", comment: "")),
             NSTextField(labelWithString: NSLocalizedString("Version", comment: "") + " " + App.version),
             NSTextField(labelWithString: App.licence),
-            NSTextField(labelWithString: NSLocalizedString("Based on AltTab by lwouis", comment: "")),
-            HyperlinkLabel(NSLocalizedString("Upstream source code", comment: ""), App.repository),
         ], .vertical)
         appText.spacing = GridView.interPadding / 2
-        let rowToSeparate = 3
+        let rowToSeparate = 2
         appText.views[rowToSeparate].topAnchor.constraint(equalTo: appText.views[rowToSeparate - 1].bottomAnchor, constant: GridView.interPadding).isActive = true
         let appInfo = NSStackView(views: [appIcon, appText])
         appIcon.translatesAutoresizingMaskIntoConstraints = false

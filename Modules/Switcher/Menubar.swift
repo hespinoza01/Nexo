@@ -22,7 +22,6 @@ enum Menubar {
         items.append(item(NSLocalizedString("Show", comment: "Menubar option"), #selector(App.showUiFromShortcut0), "eye"))
         items.append(item(NSLocalizedString("Switcher Settings…", comment: "Menubar option"), #selector(App.showSettingsWindow), "gear"))
         items.append(item(NSLocalizedString("Check permissions…", comment: "Menubar option"), #selector(App.checkPermissions), "hand.raised"))
-        items.append(item(NSLocalizedString("About the switcher", comment: "Menubar option"), #selector(App.showAboutWindow), "info.circle"))
         return items
     }
 

@@ -39,27 +39,27 @@ final class MonitorDetailViewController: NSViewController {
         for table in [cpuTable, cpuProcesses, gpuTable, memoryTable, memoryProcesses, networkTable, addressTable, diskTable, batteryTable, temperatureTable] {
             table.rowSpacing = density.rowSpacing
         }
-        let title = NSTextField(labelWithString: "System Monitor")
+        let title = NSTextField(labelWithString: L("System Monitor"))
         title.font = .systemFont(ofSize: 14, weight: .semibold)
-        let settings = NSButton(image: NSImage(systemSymbolName: "gearshape", accessibilityDescription: "Settings")!,
+        let settings = NSButton(image: NSImage(systemSymbolName: "gearshape", accessibilityDescription: L("Settings"))!,
             target: self, action: #selector(openSettings))
         settings.isBordered = false
         settings.contentTintColor = .secondaryLabelColor
-        let activity = NSButton(image: NSImage(systemSymbolName: "waveform.path.ecg", accessibilityDescription: "Open Activity Monitor")!,
+        let activity = NSButton(image: NSImage(systemSymbolName: "waveform.path.ecg", accessibilityDescription: L("Open Activity Monitor"))!,
             target: self, action: #selector(openActivityMonitor))
         activity.isBordered = false
         activity.contentTintColor = .secondaryLabelColor
-        activity.toolTip = "Open Activity Monitor"
+        activity.toolTip = L("Open Activity Monitor")
         let header = NSStackView(views: [title, NSView(), activity, settings])
 
         let charts = style.showCharts
         sections[.cpu] = MonitorSection("CPU", [ringRow(cpuRing, cpuTable)] + (style.showCoreBars ? [coreBars] : []) + [cpuProcesses], density: density)
         sections[.gpu] = MonitorSection("GPU", [ringRow(gpuRing, gpuTable)], density: density)
-        sections[.memory] = MonitorSection("Memory", [ringRow(memoryRing, memoryTable)] + (charts ? [memoryChart] : []) + [memoryProcesses], density: density)
-        sections[.network] = MonitorSection("Network", charts ? [chartRow(networkTable, networkChart), addressTable] : [networkTable, addressTable], density: density)
-        sections[.disk] = MonitorSection("Disk", [ringRow(diskRing, diskTable)], density: density)
-        sections[.battery] = MonitorSection("Battery", [ringRow(batteryRing, batteryTable)], density: density)
-        sections[.temperature] = MonitorSection("Temperature", [temperatureTable] + (charts ? [temperatureChart] : []), density: density)
+        sections[.memory] = MonitorSection(L("Memory"), [ringRow(memoryRing, memoryTable)] + (charts ? [memoryChart] : []) + [memoryProcesses], density: density)
+        sections[.network] = MonitorSection(L("Network"), charts ? [chartRow(networkTable, networkChart), addressTable] : [networkTable, addressTable], density: density)
+        sections[.disk] = MonitorSection(L("Disk"), [ringRow(diskRing, diskTable)], density: density)
+        sections[.battery] = MonitorSection(L("Battery"), [ringRow(batteryRing, batteryTable)], density: density)
+        sections[.temperature] = MonitorSection(L("Temperature"), [temperatureTable] + (charts ? [temperatureChart] : []), density: density)
 
         let visible = config.orderedMetrics.filter(config.isSectionVisible).compactMap { sections[$0] }
         let stack = NSStackView(views: [header] + visible)
@@ -104,18 +104,18 @@ final class MonitorDetailViewController: NSViewController {
         let eColor = color(style.efficiencyColor, .systemTeal)
         let pColor = color(style.performanceColor, .systemIndigo)
         var rows: [InfoTable.Row] = [
-            .init("Usage", MonitorFormat.percent(load.total)),
-            .init("System", MonitorFormat.percent(load.system), dot: color(style.systemColor, .systemRed)),
-            .init("User", MonitorFormat.percent(load.user), dot: color(style.userColor, .systemBlue)),
-            .init("Idle", MonitorFormat.percent(load.idle)),
+            .init(L("Usage"), MonitorFormat.percent(load.total)),
+            .init(L("System"), MonitorFormat.percent(load.system), dot: color(style.systemColor, .systemRed)),
+            .init(L("User"), MonitorFormat.percent(load.user), dot: color(style.userColor, .systemBlue)),
+            .init(L("Idle"), MonitorFormat.percent(load.idle)),
         ]
         if efficiency > 0, efficiency < load.perCore.count {
             let average = { (cores: ArraySlice<Double>) in cores.reduce(0, +) / Double(max(1, cores.count)) }
-            rows.append(.init("E-cores", MonitorFormat.percent(average(load.perCore[..<efficiency])), dot: eColor))
-            rows.append(.init("P-cores", MonitorFormat.percent(average(load.perCore[efficiency...])), dot: pColor))
+            rows.append(.init(L("E-cores"), MonitorFormat.percent(average(load.perCore[..<efficiency])), dot: eColor))
+            rows.append(.init(L("P-cores"), MonitorFormat.percent(average(load.perCore[efficiency...])), dot: pColor))
         }
         if let temperature = sample.temperature, !config.isSectionVisible(.temperature) {
-            rows.append(.init("Temperature", String(format: "%.0f °C", temperature.maximum), valueColor: Self.alertTint(config.color(.temperature, sample))))
+            rows.append(.init(L("Temperature"), String(format: "%.0f °C", temperature.maximum), valueColor: Self.alertTint(config.color(.temperature, sample))))
         }
         cpuTable.rows = rows
         coreBars.set(load.perCore, efficiencyCores: efficiency, efficiencyColor: eColor, performanceColor: pColor)
@@ -126,9 +126,9 @@ final class MonitorDetailViewController: NSViewController {
         guard let gpu = sample.gpu else { return }
         gpuRing.set(gpu.device, color: config.color(.gpu, sample))
         gpuTable.rows = [
-            .init("Usage", MonitorFormat.percent(gpu.device)),
-            gpu.renderer.map { .init("Renderer", MonitorFormat.percent($0)) },
-            gpu.tiler.map { .init("Tiler", MonitorFormat.percent($0)) },
+            .init(L("Usage"), MonitorFormat.percent(gpu.device)),
+            gpu.renderer.map { .init(L("Renderer"), MonitorFormat.percent($0)) },
+            gpu.tiler.map { .init(L("Tiler"), MonitorFormat.percent($0)) },
         ].compactMap { $0 }
     }
 
@@ -138,15 +138,15 @@ final class MonitorDetailViewController: NSViewController {
         let ring = config.color(.memory, sample)
         let level = MonitorWidgetView.color(.memory, sample)
         memoryRing.set(sample.pressure.percent.map { Double($0) / 100 }, color: ring)
-        var rows: [InfoTable.Row] = [.init("Pressure", MonitorModule.levelName(sample.pressure.level), valueColor: level)]
+        var rows: [InfoTable.Row] = [.init(L("Pressure"), MonitorModule.levelName(sample.pressure.level), valueColor: level)]
         if let m = sample.memory {
             rows += [
-                .init("Used", MonitorFormat.usedOfTotal(m.used, m.total)),
-                .init("App", MonitorFormat.bytes(m.app), dot: color(style.appColor, .systemBlue)),
-                .init("Wired", MonitorFormat.bytes(m.wired), dot: color(style.wiredColor, .systemOrange)),
-                .init("Compressed", MonitorFormat.bytes(m.compressed), dot: color(style.compressedColor, .systemPink)),
-                .init("Cached", MonitorFormat.bytes(m.cached)),
-                .init("Swap", MonitorFormat.bytes(m.swapUsed)),
+                .init(L("Used"), MonitorFormat.usedOfTotal(m.used, m.total)),
+                .init(L("App"), MonitorFormat.bytes(m.app), dot: color(style.appColor, .systemBlue)),
+                .init(L("Wired"), MonitorFormat.bytes(m.wired), dot: color(style.wiredColor, .systemOrange)),
+                .init(L("Compressed"), MonitorFormat.bytes(m.compressed), dot: color(style.compressedColor, .systemPink)),
+                .init(L("Cached"), MonitorFormat.bytes(m.cached)),
+                .init(L("Swap"), MonitorFormat.bytes(m.swapUsed)),
             ]
         }
         memoryTable.rows = rows
@@ -158,12 +158,12 @@ final class MonitorDetailViewController: NSViewController {
         let up = color(style.uploadColor, .systemRed)
         let down = color(style.downloadColor, .systemBlue)
         networkTable.rows = [
-            .init("Upload", sample.network.map { MonitorFormat.rate($0.upload) } ?? "–", dot: up),
-            .init("Download", sample.network.map { MonitorFormat.rate($0.download) } ?? "–", dot: down),
+            .init(L("Upload"), sample.network.map { MonitorFormat.rate($0.upload) } ?? "–", dot: up),
+            .init(L("Download"), sample.network.map { MonitorFormat.rate($0.download) } ?? "–", dot: down),
         ]
         networkChart.set(history, uploadColor: up, downloadColor: down)
         addressTable.rows = [
-            .init("Local IP", sample.localAddress.map { "\($0.address) (\($0.interface))" } ?? "Offline"),
+            .init(L("Local IP"), sample.localAddress.map { "\($0.address) (\($0.interface))" } ?? L("Offline")),
         ]
     }
 
@@ -173,10 +173,10 @@ final class MonitorDetailViewController: NSViewController {
         let used = 1 - Double(space.free) / Double(max(1, space.total))
         diskRing.set(used, color: config.color(.disk, sample))
         diskTable.rows = [
-            .init("Free", MonitorFormat.bytes(UInt64(space.free))),
-            .init("Total", MonitorFormat.bytes(UInt64(space.total))),
-            .init("Read", sample.diskIO.map { MonitorFormat.rate($0.read) } ?? "–"),
-            .init("Write", sample.diskIO.map { MonitorFormat.rate($0.write) } ?? "–"),
+            .init(L("Free"), MonitorFormat.bytes(UInt64(space.free))),
+            .init(L("Total"), MonitorFormat.bytes(UInt64(space.total))),
+            .init(L("Read"), sample.diskIO.map { MonitorFormat.rate($0.read) } ?? "–"),
+            .init(L("Write"), sample.diskIO.map { MonitorFormat.rate($0.write) } ?? "–"),
         ]
     }
 
@@ -185,8 +185,8 @@ final class MonitorDetailViewController: NSViewController {
         guard let battery = sample.battery else { return }
         batteryRing.set(Double(battery.percent) / 100, color: config.color(.battery, sample))
         batteryTable.rows = [
-            .init("State", battery.isCharging ? "Charging" : battery.onAC ? "Power adapter" : "On battery"),
-            battery.cycleCount.map { .init("Cycles", "\($0)") },
+            .init(L("State"), battery.isCharging ? L("Charging") : battery.onAC ? L("Power adapter") : L("On battery")),
+            battery.cycleCount.map { .init(L("Cycles"), "\($0)") },
         ].compactMap { $0 }
     }
 
@@ -195,8 +195,8 @@ final class MonitorDetailViewController: NSViewController {
         guard let temperature = sample.temperature else { return }
         let tint = config.color(.temperature, sample)
         temperatureTable.rows = [
-            .init("Average", String(format: "%.0f °C", temperature.average)),
-            .init("Hottest", String(format: "%.0f °C", temperature.maximum), valueColor: Self.alertTint(tint)),
+            .init(L("Average"), String(format: "%.0f °C", temperature.average)),
+            .init(L("Hottest"), String(format: "%.0f °C", temperature.maximum), valueColor: Self.alertTint(tint)),
         ]
         temperatureChart.values = history
         temperatureChart.color = tint

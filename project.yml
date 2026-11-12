@@ -54,7 +54,7 @@ targets:
         NSSupportsAutomaticTermination: false
         NSSupportsSuddenTermination: false
         LSApplicationCategoryType: public.app-category.utilities
-        NSHumanReadableCopyright: "GPL-3.0 — includes code from AltTab (lwouis) and others, see NOTICE.md"
+        NSHumanReadableCopyright: "GPL-3.0"
         NSAppleEventsUsageDescription: "Nexo uses Automation to read context from other apps."
         NSAudioCaptureUsageDescription: "Nexo needs audio capture to control per-app volume."
     entitlements:

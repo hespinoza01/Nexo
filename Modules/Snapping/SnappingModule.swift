@@ -5,7 +5,7 @@ import ShortcutRecorder
 /// Move and resize the focused window with shortcuts, or by dragging it to a screen edge.
 final class SnappingModule: NexoModule {
     static let id = "snapping"
-    let title = "Window Snapping"
+    var title: String { L("Window Snapping") }
     let icon = "rectangle.split.2x1"
     let permissions: [ModulePermission] = [.accessibility]
     private(set) var isRunning = false
@@ -50,7 +50,7 @@ final class SnappingModule: NexoModule {
     }
 
     func menuItems() -> [NSMenuItem] {
-        let item = NSMenuItem(title: "Move Window", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: L("Move Window"), action: nil, keyEquivalent: "")
         let submenu = NSMenu()
         for action in SnapAction.allCases {
             let entry = NSMenuItem(title: action.title, action: #selector(menuAction(_:)), keyEquivalent: "")
@@ -72,13 +72,13 @@ final class SnappingModule: NexoModule {
         gapField.widthAnchor.constraint(equalToConstant: 50).isActive = true
         gapField.target = self
         gapField.action = #selector(gapChanged(_:))
-        let drag = NSButton(checkboxWithTitle: "Snap when dragging a window to a screen edge", target: self, action: #selector(dragToggled(_:)))
+        let drag = NSButton(checkboxWithTitle: L("Snap when dragging a window to a screen edge"), target: self, action: #selector(dragToggled(_:)))
         drag.state = dragSnapEnabled ? .on : .off
-        var views: [NSView] = [drag, SettingsForm.row("Gap between windows (pt)", gapField)]
+        var views: [NSView] = [drag, SettingsForm.row(L("Gap between windows (pt)"), gapField)]
         if Self.nativeTilingEnabled() {
-            views.append(SettingsForm.note("⚠︎ macOS window tiling is on (System Settings › Desktop & Dock › “Drag windows to screen edges to tile”). Turn it off to avoid both snapping at once."))
+            views.append(SettingsForm.note(L("⚠︎ macOS window tiling is on (System Settings › Desktop & Dock › “Drag windows to screen edges to tile”). Turn it off to avoid both snapping at once.")))
         }
-        views.append(SettingsForm.header("Shortcuts"))
+        views.append(SettingsForm.header(L("Shortcuts")))
         let grid = SnapAction.allCases.map { action -> NSView in
             let label = NSTextField(labelWithString: action.title)
             label.widthAnchor.constraint(equalToConstant: 150).isActive = true

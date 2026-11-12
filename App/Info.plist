@@ -33,7 +33,7 @@
 	<key>NSAudioCaptureUsageDescription</key>
 	<string>Nexo needs audio capture to control per-app volume.</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>GPL-3.0 — includes code from AltTab (lwouis) and others, see NOTICE.md</string>
+	<string>GPL-3.0</string>
 	<key>NSPrincipalClass</key>
 	<string>$(PRODUCT_MODULE_NAME).App</string>
 	<key>NSSupportsAutomaticTermination</key>

@@ -3,7 +3,7 @@ import Cocoa
 /// Switches the keyboard input source automatically when an app becomes active.
 final class InputSourceModule: NexoModule {
     static let id = "inputSource"
-    let title = "Input Source per App"
+    var title: String { L("Input Source per App") }
     let icon = "keyboard"
     private(set) var isRunning = false
 
@@ -28,27 +28,27 @@ final class InputSourceModule: NexoModule {
 
     func menuItems() -> [NSMenuItem] {
         let current = InputSourceService.current()
-        let info = NSMenuItem(title: "Current: \(current?.name ?? "unknown")", action: nil, keyEquivalent: "")
+        let info = NSMenuItem(title: L("Current: %@", current?.name ?? L("unknown")), action: nil, keyEquivalent: "")
         info.isEnabled = false
         guard let app = Self.targetApp(), let bundleId = app.bundleIdentifier else { return [info] }
-        let pin = NSMenuItem(title: "Use for \(app.localizedName ?? bundleId)", action: nil, keyEquivalent: "")
+        let pin = NSMenuItem(title: L("Use for %@", app.localizedName ?? bundleId), action: nil, keyEquivalent: "")
         pin.submenu = sourcesMenu(bundleId: bundleId, selected: store.rules[bundleId])
         return [info, pin]
     }
 
     func settingsView() -> NSView {
-        let fallback = sourcePopUp(selected: store.fallbackSourceId, noneTitle: "Leave unchanged")
+        let fallback = sourcePopUp(selected: store.fallbackSourceId, noneTitle: L("Leave unchanged"))
         fallback.target = self
         fallback.action = #selector(fallbackChanged(_:))
         let rules = SettingsForm.stack([], spacing: 6)
         rulesStack = rules
         reloadRules()
         return SettingsForm.stack([
-            SettingsForm.row("For apps without a rule", fallback),
-            SettingsForm.header("Rules"),
+            SettingsForm.row(L("For apps without a rule"), fallback),
+            SettingsForm.header(L("Rules")),
             rules,
-            NSButton(title: "Add App…", target: self, action: #selector(addApp)),
-            SettingsForm.note("New rules start with the current input source. Also from the Nexo menu while the app is frontmost: “Use for <app>”."),
+            NSButton(title: L("Add App…"), target: self, action: #selector(addApp)),
+            SettingsForm.note(L("New rules start with the current input source. Also from the Nexo menu while the app is frontmost: “Use for <app>”.")),
         ])
     }
 
@@ -73,7 +73,7 @@ final class InputSourceModule: NexoModule {
             menu.addItem(item)
         }
         menu.addItem(.separator())
-        let clear = NSMenuItem(title: "No rule", action: #selector(pinSource(_:)), keyEquivalent: "")
+        let clear = NSMenuItem(title: L("No rule"), action: #selector(pinSource(_:)), keyEquivalent: "")
         clear.target = self
         clear.representedObject = [bundleId]
         clear.state = selected == nil ? .on : .off
@@ -86,7 +86,7 @@ final class InputSourceModule: NexoModule {
         rulesStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         let rules = store.rules.sorted { Self.appName($0.key) < Self.appName($1.key) }
         guard !rules.isEmpty else {
-            rulesStack.addArrangedSubview(SettingsForm.note("No rules yet."))
+            rulesStack.addArrangedSubview(SettingsForm.note(L("No rules yet.")))
             return
         }
         rules.forEach { rulesStack.addArrangedSubview(ruleRow(bundleId: $0.key, sourceId: $0.value)) }
@@ -99,7 +99,7 @@ final class InputSourceModule: NexoModule {
         popUp.identifier = .init(bundleId)
         popUp.target = self
         popUp.action = #selector(ruleChanged(_:))
-        let remove = NSButton(image: NSImage(systemSymbolName: "minus.circle", accessibilityDescription: "Remove")!,
+        let remove = NSButton(image: NSImage(systemSymbolName: "minus.circle", accessibilityDescription: L("Remove"))!,
             target: self, action: #selector(removeRule(_:)))
         remove.isBordered = false
         remove.identifier = .init(bundleId)

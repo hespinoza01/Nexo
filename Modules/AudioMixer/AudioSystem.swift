@@ -94,7 +94,7 @@ enum AudioSystem {
     }
 
     static func name(of device: AudioObjectID) -> String {
-        CoreAudioProperty.string(device, kAudioObjectPropertyName) ?? "Output"
+        CoreAudioProperty.string(device, kAudioObjectPropertyName) ?? L("Output")
     }
 
     /// Output volume 0–1 of the default device: the main element when it has one, else channel 1.
