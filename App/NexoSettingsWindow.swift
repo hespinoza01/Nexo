@@ -141,17 +141,30 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
         scroll.documentView = sidebar
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
-        let split = NSSplitView()
-        split.isVertical = true
-        split.dividerStyle = .thin
-        split.addArrangedSubview(scroll)
-        split.addArrangedSubview(content)
-        let width = scroll.widthAnchor.constraint(equalToConstant: 200)
-        width.priority = .defaultLow
-        width.isActive = true
-        scroll.widthAnchor.constraint(greaterThanOrEqualToConstant: 160).isActive = true
-        split.setHoldingPriority(.defaultHigh, forSubviewAt: 0)
-        window?.contentView = split
+        // A real sidebar item: draggable divider within bounds, width remembered between launches.
+        let split = NSSplitViewController()
+        let sidebarItem = NSSplitViewItem(sidebarWithViewController: Self.controller(for: scroll))
+        sidebarItem.minimumThickness = 170
+        sidebarItem.maximumThickness = 320
+        sidebarItem.canCollapse = false
+        sidebarItem.holdingPriority = .init(260)
+        split.addSplitViewItem(sidebarItem)
+        split.addSplitViewItem(NSSplitViewItem(viewController: Self.controller(for: content)))
+        split.splitView.autosaveName = "NexoSettingsSidebar"
+        let hasSavedWidth = UserDefaults.standard.object(forKey: "NSSplitView Subview Frames NexoSettingsSidebar") != nil
+        // Assigning the controller resizes the window to its content; keep the saved/initial frame.
+        let frame = window?.frame ?? .zero
+        window?.contentViewController = split
+        window?.setFrame(frame, display: false)
+        guard !hasSavedWidth else { return }
+        split.splitView.layoutSubtreeIfNeeded()
+        split.splitView.setPosition(210, ofDividerAt: 0)
+    }
+
+    private static func controller(for view: NSView) -> NSViewController {
+        let controller = NSViewController()
+        controller.view = view
+        return controller
     }
 }
 
