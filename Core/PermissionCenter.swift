@@ -12,6 +12,10 @@ enum PermissionCenter {
         case .screenRecording: return CGPreflightScreenCaptureAccess() ? .granted : .denied
         // Automation and audio capture have no reliable preflight API; the system prompts on first use.
         case .automation, .audioCapture: return .unknown
+        // No API either; reading a protected file is the reliable probe.
+        case .fullDiskAccess:
+            guard ControlCenterAllowList.isSupported else { return .unknown }
+            return ControlCenterAllowList.shared.isReadable ? .granted : .denied
         }
     }
 
@@ -19,7 +23,7 @@ enum PermissionCenter {
         switch permission {
         case .accessibility: requestAccessibility()
         case .screenRecording: _ = CGRequestScreenCaptureAccess()
-        case .automation, .audioCapture: openSettings(permission)
+        case .automation, .audioCapture, .fullDiskAccess: openSettings(permission)
         }
     }
 
@@ -43,6 +47,7 @@ enum PermissionCenter {
         case .screenRecording: return "Privacy_ScreenCapture"
         case .automation: return "Privacy_Automation"
         case .audioCapture: return "Privacy_AudioCapture"
+        case .fullDiskAccess: return "Privacy_AllFiles"
         }
     }
 }

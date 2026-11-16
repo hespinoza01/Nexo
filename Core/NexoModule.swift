@@ -6,6 +6,7 @@ enum ModulePermission: String, CaseIterable, Codable {
     case screenRecording
     case automation
     case audioCapture
+    case fullDiskAccess
 
     var title: String {
         switch self {
@@ -13,6 +14,7 @@ enum ModulePermission: String, CaseIterable, Codable {
         case .screenRecording: return L("Screen Recording")
         case .automation: return L("Automation")
         case .audioCapture: return L("System Audio Recording")
+        case .fullDiskAccess: return L("Full Disk Access")
         }
     }
 }

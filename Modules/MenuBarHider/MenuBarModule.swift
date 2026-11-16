@@ -1,26 +1,44 @@
 import Cocoa
+import SwiftUI
 
-/// Menu bar housekeeping on macOS 27, where Ice-style hiding no longer works (see
-/// Spikes/MenuBarHide/FINDINGS.md): the bar is drawn as a single window by MenuBarAgent and hiding
-/// third-party items now needs a private "assessment mode" assertion that also blocks clicks on the
-/// clock, battery and Wi-Fi. Instead this module controls Nexo's own extra items and opens the native
-/// per-app "Allow in the Menu Bar" list, which hides third-party items in a supported way.
+/// Menu bar manager for macOS 27, where the bar is a single MenuBarAgent window and separator-based
+/// hiding no longer works (Spikes/MenuBarHide/FINDINGS.md). Apps' icons are hidden through macOS's own
+/// per-app "Allow in the Menu Bar" switch (`AllowStateController`), and reordered with a synthetic
+/// ⌘-drag (`MenuBarDragger`). Also controls Nexo's own extra items and the icon spacing.
 final class MenuBarModule: NexoModule {
     static let id = "menuBar"
     var title: String { L("Menu Bar") }
     let icon = "menubar.rectangle"
     private(set) var isRunning = false
+    let permissions: [ModulePermission] = [.accessibility, .fullDiskAccess]
+    let manager = MenuBarManager()
+    private lazy var revealButton = MenuBarRevealButton(manager: manager)
+    private lazy var hotKey = GlobalHotKey { [weak self] in self?.manager.toggleReveal() }
 
     /// Nexo modules that add their own status item, besides the main Nexo icon.
     private static let itemOwners = [MonitorModule.id]
     private static let settingsURL = URL(string: "x-apple.systempreferences:com.apple.ControlCenter-Settings.extension")!
 
-    func start() { isRunning = true }
+    func start() {
+        isRunning = true
+        manager.start()
+        hotKey.register(ShortcutStore.load(MenuBarManager.Key.revealShortcut))
+        revealButton.install()
+    }
 
-    func stop() { isRunning = false }
+    /// Turning the module off shows every icon Nexo hid; quitting Nexo keeps them hidden.
+    func stop() {
+        isRunning = false
+        hotKey.unregister()
+        revealButton.remove()
+        manager.stop(restore: !NexoCore.isTerminating)
+    }
 
     func menuItems() -> [NSMenuItem] {
-        let item = NSMenuItem(title: L("Hide Menu Bar Icons…"), action: #selector(openSystemSettings), keyEquivalent: "")
+        guard manager.controller.sections.values.contains(.hidden) else { return [] }
+        let remaining = manager.revealedUntil.map { Int(ceil($0.timeIntervalSinceNow)) } ?? 0
+        let title = manager.isRevealed ? L("Hide icons again (%d s)", remaining) : L("Show hidden icons")
+        let item = NSMenuItem(title: title, action: #selector(toggleReveal), keyEquivalent: "")
         item.target = self
         return [item]
     }
@@ -45,21 +63,30 @@ final class MenuBarModule: NexoModule {
         refreshSpacingLabel()
         let reset = NSButton(title: L("Use macOS default"), target: self, action: #selector(resetSpacing))
         let restart = NSButton(title: L("Restart Nexo to apply"), target: self, action: #selector(restartNexo))
-        let version = ProcessInfo.processInfo.operatingSystemVersion
-        return SettingsForm.stack([
+        let layout = NSHostingView(rootView: MenuBarLayoutView(manager: manager))
+        layout.translatesAutoresizingMaskIntoConstraints = false
+        layout.widthAnchor.constraint(greaterThanOrEqualToConstant: 560).isActive = true
+        let shortcut = HotKeyField(key: MenuBarManager.Key.revealShortcut) { [weak self] in
+            guard self?.isRunning == true else { return }
+            self?.hotKey.register($0)
+        }
+        shortcut.widthAnchor.constraint(equalToConstant: 160).isActive = true
+        let form = SettingsForm.stack([
+            SettingsForm.header(L("Icons of other apps")),
+            SettingsForm.row(L("Show hidden icons"), shortcut),
+            revealButtonToggle(),
+            layout,
+            SettingsForm.note(L("Hiding works per app: macOS has one “Allow in the Menu Bar” switch per app, so all of an app's icons go together. Turning this module off shows again every icon Nexo hid.")),
             SettingsForm.header(L("Nexo items")),
             SettingsForm.stack(toggles, spacing: 6),
             SettingsForm.header(L("Spacing between icons")),
             SettingsForm.row(L("Spacing"), NSStackView(views: [spacing, value])),
             NSStackView(views: [reset, restart]),
             SettingsForm.note(L("Applies to the whole menu bar. Each app picks it up when it relaunches; log out and back in to apply it to all of them.")),
-            SettingsForm.header(L("Other apps")),
             open,
-            SettingsForm.note(L("macOS %d.%d lets you turn each app's menu bar icon on or off in System Settings › Menu Bar.", version.majorVersion, version.minorVersion)),
-            SettingsForm.note(version.majorVersion >= 27
-                ? L("Why there is no hidden section: since macOS 27 the menu bar is drawn as one window, so moving or collapsing items no longer hides them. The only remaining way is a private Apple API that makes the clock, battery and Wi-Fi ignore clicks while items are hidden.")
-                : L("On this macOS version a separator-based hider from another app also works alongside Nexo.")),
         ])
+        layout.widthAnchor.constraint(equalTo: form.widthAnchor).isActive = true
+        return form
     }
 
     private weak var spacingLabel: NSTextField?
@@ -76,6 +103,22 @@ final class MenuBarModule: NexoModule {
     @objc private func resetSpacing() {
         MenuBarSpacing.set(nil)
         refreshSpacingLabel()
+    }
+
+    private func revealButtonToggle() -> NSButton {
+        let box = NSButton(checkboxWithTitle: L("Button in the menu bar to show hidden icons"), target: self, action: #selector(revealButtonToggled(_:)))
+        box.state = MenuBarRevealButton.isEnabled ? .on : .off
+        return box
+    }
+
+    @objc private func revealButtonToggled(_ sender: NSButton) {
+        MenuBarRevealButton.isEnabled = sender.state == .on
+        guard isRunning else { return }
+        sender.state == .on ? revealButton.install() : revealButton.remove()
+    }
+
+    @objc private func toggleReveal() {
+        manager.toggleReveal()
     }
 
     @objc private func restartNexo() {
