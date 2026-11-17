@@ -87,6 +87,8 @@ final class MonitorDetailViewController: NSViewController {
         self.summary = summary
 
         let processesView = NSHostingView(rootView: ProcessListView(model: processes))
+        // SwiftUI's ideal width (a confirmation, a long name) must not resize the popover.
+        processesView.sizingOptions = []
         processesView.heightAnchor.constraint(equalToConstant: Self.processesHeight).isActive = true
         self.processesView = processesView
 

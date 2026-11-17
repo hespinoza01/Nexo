@@ -23,6 +23,9 @@ struct ProcessEntry: Equatable, Identifiable {
     /// Process start time in microseconds since 1970. Identifies the process across pid reuse.
     var startTime: UInt64?
     var bundleID: String?
+    /// App macOS holds responsible for this process (the terminal behind a CLI, the app behind a
+    /// helper), when it isn't the process itself.
+    var owner: String? = nil
 
     var id: pid_t { pid }
 }
@@ -81,12 +84,14 @@ final class ProcessListReader {
             var io = [pid_t: ProcessIOSample]()
             var starts = [pid_t: UInt64]()
             var names = [pid_t: String]()
+            var owners = [pid_t: pid_t]()
             for row in rows {
                 if row.uid == me, let sample = Self.ioSample(row.pid) { io[row.pid] = sample }
                 // A start after `ps` ran means the pid was reused in between: the row describes the old
                 // process, so it gets no identity and can't be stopped.
                 if let start = ProcessIdentity.startTime(row.pid), start <= began { starts[row.pid] = start }
-                if let name = Self.executableName(row.pid) { names[row.pid] = name }
+                names[row.pid] = Self.displayName(command: row.command, path: Self.executablePath(row.pid))
+                if let responsible = ProcessIdentity.responsiblePID(row.pid), responsible != row.pid { owners[row.pid] = responsible }
             }
             var unresponsive = Set<pid_t>()
             for (pid, app) in apps where app.policy == .regular && UnresponsiveDetector.isUnresponsive(pid) {
@@ -94,7 +99,7 @@ final class ProcessListReader {
             }
             let confirmed = unresponsive.intersection(self.suspects)
             self.suspects = unresponsive
-            let built = Self.build(rows: rows, apps: apps, io: io, starts: starts, names: names, unresponsive: confirmed,
+            let built = Self.build(rows: rows, apps: apps, io: io, starts: starts, names: names, owners: owners, unresponsive: confirmed,
                                    previous: self.marks, now: ProcessInfo.processInfo.systemUptime, me: me)
             self.marks = built.marks
             DispatchQueue.main.async {
@@ -133,12 +138,13 @@ final class ProcessListReader {
 
     /// Merges every source into rows. Pure; exposed for tests.
     static func build(rows: [PSRow], apps: [pid_t: RunningAppInfo], io: [pid_t: ProcessIOSample], starts: [pid_t: UInt64],
-                      names: [pid_t: String] = [:], unresponsive: Set<pid_t>, previous: [String: DiskMark], now: TimeInterval, me: uid_t)
+                      names: [pid_t: String] = [:], owners: [pid_t: pid_t] = [:], unresponsive: Set<pid_t>, previous: [String: DiskMark], now: TimeInterval, me: uid_t)
         -> (entries: [ProcessEntry], marks: [String: DiskMark]) {
         var marks = [String: DiskMark]()
         let entries = rows.map { row -> ProcessEntry in
             let app = apps[row.pid]
             let start = starts[row.pid]
+            let owner = owners[row.pid].flatMap { apps[$0]?.name }
             var rate: Double?
             var memory: UInt64? = row.rss > 0 ? row.rss : nil
             if let sample = io[row.pid] {
@@ -151,17 +157,25 @@ final class ProcessListReader {
             return ProcessEntry(pid: row.pid, uid: row.uid, name: app?.name ?? names[row.pid] ?? row.command,
                                 kind: kind(uid: row.uid, me: me, policy: app?.policy), memory: memory, cpu: row.cpu,
                                 diskRate: rate, isUnresponsive: unresponsive.contains(row.pid), startTime: start,
-                                bundleID: app?.bundleID)
+                                bundleID: app?.bundleID, owner: owner)
         }
         return (entries, marks)
     }
 
-    /// `ps -c` truncates to 16 characters; the executable path has the full name.
-    static func executableName(_ pid: pid_t) -> String? {
+    static func executablePath(_ pid: pid_t) -> String? {
         var buffer = [CChar](repeating: 0, count: Int(4 * MAXPATHLEN))
         guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
-        let name = (String(cString: buffer) as NSString).lastPathComponent
-        return name.isEmpty ? nil : name
+        let path = String(cString: buffer)
+        return path.isEmpty ? nil : path
+    }
+
+    /// The process name (`ps -c`, what the process calls itself) unless the kernel cut it at 15
+    /// characters; then the file name completes it. The file name alone can be meaningless: some
+    /// tools install each release as a binary named after its version ("2.1.326").
+    static func displayName(command: String, path: String?) -> String {
+        guard let path, command.count >= 15 else { return command }
+        let file = (path as NSString).lastPathComponent
+        return file.count > command.count && file.hasPrefix(command) ? file : command
     }
 
     static func ioSample(_ pid: pid_t) -> ProcessIOSample? {
@@ -184,6 +198,33 @@ final class ProcessListReader {
 }
 
 enum ProcessIdentity {
+    private typealias ResponsibleFn = @convention(c) (pid_t) -> pid_t
+    /// Private libsystem call behind Activity Monitor's grouping; -1 when there is none.
+    private static let responsible: ResponsibleFn? = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "responsibility_get_pid_responsible_for_pid")
+        .map { unsafeBitCast($0, to: ResponsibleFn.self) }
+
+    static func responsiblePID(_ pid: pid_t) -> pid_t? {
+        guard let responsible else { return nil }
+        let owner = responsible(pid)
+        return owner > 0 ? owner : nil
+    }
+
+    /// Parent pid and kernel process name (up to 15 characters).
+    static func parent(_ pid: pid_t) -> (pid: pid_t, command: String)? {
+        guard let info = kinfo(pid) else { return nil }
+        var comm = info.kp_proc.p_comm
+        let command = withUnsafeBytes(of: &comm) { String(cString: $0.bindMemory(to: CChar.self).baseAddress!) }
+        return (info.kp_eproc.e_ppid, command)
+    }
+
+    private static func kinfo(_ pid: pid_t) -> kinfo_proc? {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        guard sysctl(&mib, u_int(mib.count), &info, &size, nil, 0) == 0, size > 0 else { return nil }
+        return info
+    }
+
     /// Start time of `pid` in microseconds since 1970, from `sysctl` (allowed for every user's process).
     static func startTime(_ pid: pid_t) -> UInt64? {
         var info = kinfo_proc()
@@ -265,7 +306,7 @@ struct ProcessQuery: Equatable {
         let pid = pid_t(term)
         return entries
             .filter { filter.includes($0.kind) }
-            .filter { term.isEmpty || $0.pid == pid || $0.name.localizedCaseInsensitiveContains(term) }
+            .filter { term.isEmpty || $0.pid == pid || $0.name.localizedCaseInsensitiveContains(term) || $0.owner?.localizedCaseInsensitiveContains(term) == true }
             .sorted(by: precedes)
     }
 

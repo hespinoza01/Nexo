@@ -610,3 +610,21 @@
 "Couldn't stop %@: %@" = "No se pudo terminar %@: %@";
 "This process is protected." = "Este proceso está protegido.";
 "Couldn't ask for administrator rights." = "No se pudieron pedir permisos de administrador.";
+
+/* Monitor: process details */
+"Belongs to" = "Pertenece a";
+"Command" = "Comando";
+"Copy PID" = "Copiar PID";
+"Copy location" = "Copiar ubicación";
+"Exited" = "Terminado";
+"Identifier" = "Identificador";
+"Location" = "Ubicación";
+"Not available" = "No disponible";
+"PID" = "PID";
+"PID %d · %@ — click for details" = "PID %d · %@ — clic para ver detalles";
+"Parent process" = "Proceso padre";
+"Show in Finder" = "Mostrar en Finder";
+"Signed by" = "Firmado por";
+"Started" = "Inicio";
+"Team ID" = "Team ID";
+"Unsigned or not readable" = "Sin firma o no legible";

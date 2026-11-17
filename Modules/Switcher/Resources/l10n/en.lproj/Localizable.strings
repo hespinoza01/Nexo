@@ -610,3 +610,21 @@
 "Couldn't stop %@: %@" = "Couldn't stop %@: %@";
 "This process is protected." = "This process is protected.";
 "Couldn't ask for administrator rights." = "Couldn't ask for administrator rights.";
+
+/* Monitor: process details */
+"Belongs to" = "Belongs to";
+"Command" = "Command";
+"Copy PID" = "Copy PID";
+"Copy location" = "Copy location";
+"Exited" = "Exited";
+"Identifier" = "Identifier";
+"Location" = "Location";
+"Not available" = "Not available";
+"PID" = "PID";
+"PID %d · %@ — click for details" = "PID %d · %@ — click for details";
+"Parent process" = "Parent process";
+"Show in Finder" = "Show in Finder";
+"Signed by" = "Signed by";
+"Started" = "Started";
+"Team ID" = "Team ID";
+"Unsigned or not readable" = "Unsigned or not readable";

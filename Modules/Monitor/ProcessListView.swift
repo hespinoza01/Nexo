@@ -14,6 +14,9 @@ final class ProcessListModel: ObservableObject {
     @Published var confirming: pid_t?
     @Published private(set) var stopping = Set<pid_t>()
     @Published var message: String?
+    /// Process whose detail page is open, as listed when it was opened.
+    @Published private(set) var selected: ProcessEntry?
+    @Published private(set) var details: ProcessDetails?
     private var icons = [pid_t: NSImage]()
     /// Asks the module for a fresh read right after a process was stopped.
     var onChange: (() -> Void)?
@@ -32,10 +35,38 @@ final class ProcessListModel: ObservableObject {
         loaded = true
     }
 
-    /// Confirmations and messages belong to one opening of the popover.
+    /// Confirmations, messages and the detail page belong to one opening of the popover.
     func resetTransient() {
         confirming = nil
         message = nil
+        closeDetails()
+    }
+
+    func open(_ entry: ProcessEntry) {
+        confirming = nil
+        selected = entry
+        details = nil
+        ProcessDetailsReader.read(entry) { [weak self] details in
+            // Display only (stopping needs a start time), so a missing one still shows its details.
+            guard let selected = self?.selected, selected.pid == entry.pid, selected.startTime == entry.startTime else { return }
+            self?.details = details
+        }
+    }
+
+    func closeDetails() {
+        selected = nil
+        details = nil
+    }
+
+    /// Latest reading of the selected process; nil once it exited (or its pid was reused).
+    var selectedNow: ProcessEntry? {
+        guard let selected else { return nil }
+        return entries.first { Self.same($0, selected) }
+    }
+
+    /// Without a start time there is no identity: a reused pid must not pass for the same process.
+    static func same(_ a: ProcessEntry, _ b: ProcessEntry) -> Bool {
+        a.pid == b.pid && a.startTime != nil && a.startTime == b.startTime
     }
 
     private func refreshVisible() {
@@ -83,14 +114,24 @@ struct ProcessListView: View {
     private static let actionWidth: CGFloat = 22
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            controls
-            if let message = model.message { banner(message) }
-            header
-            Divider()
-            list
-            footer
+        Group {
+            if let selected = model.selected {
+                ProcessDetailView(model: model)
+                    // A new process gets a fresh page: no Quit / Force Quit left open from the previous one.
+                    .id("\(selected.pid):\(selected.startTime ?? 0)")
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    controls
+                    if let message = model.message { banner(message) }
+                    header
+                    Divider()
+                    list
+                    footer
+                }
+            }
         }
+        // The popover's width comes from the panel; content never pushes it wider.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var controls: some View {
@@ -157,7 +198,10 @@ struct ProcessListView: View {
         HStack(spacing: 6) {
             HStack(spacing: 5) {
                 icon(entry)
-                Text(entry.name).lineLimit(1).truncationMode(.middle)
+                Text(entry.name).lineLimit(1).truncationMode(.middle).layoutPriority(1)
+                if let owner = entry.owner, owner != entry.name {
+                    Text(owner).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                }
                 if entry.isUnresponsive {
                     Text(L("Not Responding"))
                         .font(.system(size: 9, weight: .semibold))
@@ -168,7 +212,10 @@ struct ProcessListView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .help(L("PID %d · %@", entry.pid, Self.title(entry.kind)))
+            .contentShape(Rectangle())
+            .onTapGesture { model.open(entry) }
+            .accessibilityAddTraits(.isButton)
+            .help(L("PID %d · %@ — click for details", entry.pid, Self.title(entry.kind)))
             if model.confirming == entry.pid {
                 confirmation(entry)
             } else {
@@ -184,12 +231,7 @@ struct ProcessListView: View {
     }
 
     @ViewBuilder private func icon(_ entry: ProcessEntry) -> some View {
-        if let image = model.icon(entry) {
-            Image(nsImage: image).resizable().frame(width: 16, height: 16)
-        } else {
-            Image(systemName: entry.kind == .system ? "gearshape.2" : "terminal")
-                .font(.system(size: 10)).foregroundStyle(.secondary).frame(width: 16, height: 16)
-        }
+        ProcessIcon(model: model, entry: entry, size: 16)
     }
 
     @ViewBuilder private func action(_ entry: ProcessEntry) -> some View {
@@ -205,17 +247,8 @@ struct ProcessListView: View {
         }
     }
 
-    /// Hung apps don't answer Quit, so Force Quit is the prominent choice for them.
     private func confirmation(_ entry: ProcessEntry) -> some View {
-        HStack(spacing: 4) {
-            SwiftUI.Button(L("Quit")) { model.terminate(entry, mode: .quit) }
-                .buttonStyle(.bordered)
-            SwiftUI.Button(L("Force Quit")) { model.terminate(entry, mode: .force) }
-                .buttonStyle(.borderedProminent).tint(entry.isUnresponsive ? .red : .orange)
-            SwiftUI.Button { model.confirming = nil } label: { Image(systemName: "xmark") }
-                .buttonStyle(.plain).foregroundStyle(.secondary).help(L("Cancel"))
-        }
-        .controlSize(.small)
+        ProcessStopButtons(model: model, entry: entry, onCancel: { model.confirming = nil })
     }
 
     private func banner(_ text: String) -> some View {
@@ -259,5 +292,191 @@ struct ProcessListView: View {
         case .background: return L("Background")
         case .system: return L("System")
         }
+    }
+}
+
+struct ProcessIcon: View {
+    @ObservedObject var model: ProcessListModel
+    let entry: ProcessEntry
+    let size: CGFloat
+
+    var body: some View {
+        if let image = model.icon(entry) {
+            Image(nsImage: image).resizable().frame(width: size, height: size)
+        } else {
+            Image(systemName: entry.kind == .system ? "gearshape.2" : "terminal")
+                .font(.system(size: size * 0.62)).foregroundStyle(.secondary).frame(width: size, height: size)
+        }
+    }
+}
+
+/// Quit / Force Quit. Hung apps don't answer Quit, so Force Quit is the prominent choice for them.
+struct ProcessStopButtons: View {
+    @ObservedObject var model: ProcessListModel
+    let entry: ProcessEntry
+    var onCancel: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: 4) {
+            SwiftUI.Button(L("Quit")) { model.terminate(entry, mode: .quit) }
+                .buttonStyle(.bordered)
+            SwiftUI.Button(L("Force Quit")) { model.terminate(entry, mode: .force) }
+                .buttonStyle(.borderedProminent).tint(entry.isUnresponsive ? .red : .orange)
+            if let onCancel {
+                SwiftUI.Button(action: onCancel) { Image(systemName: "xmark") }
+                    .buttonStyle(.plain).foregroundStyle(.secondary).help(L("Cancel"))
+            }
+        }
+        .controlSize(.small)
+        .fixedSize()
+    }
+}
+
+/// Detail page of one process: what it is, where its executable lives, who started it and who
+/// signed it. Usage figures follow the live list.
+struct ProcessDetailView: View {
+    @ObservedObject var model: ProcessListModel
+    /// Same two-step stop as the list: one click shows Quit / Force Quit.
+    @State private var confirmingStop = false
+
+    var body: some View {
+        if let listed = model.selected {
+            let live = model.selectedNow
+            let entry = live ?? listed
+            detail(listed: listed, live: live, entry: entry)
+        }
+    }
+
+    private func detail(listed: ProcessEntry, live: ProcessEntry?, entry: ProcessEntry) -> some View {
+        Group {
+            VStack(alignment: .leading, spacing: 8) {
+                SwiftUI.Button { model.closeDetails() } label: {
+                    Label(L("Processes"), systemImage: "chevron.left").font(.system(size: 11))
+                }
+                .buttonStyle(.plain).foregroundStyle(Color.accentColor)
+                header(entry, alive: live != nil)
+                if let message = model.message {
+                    Text(message).font(.system(size: 11)).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                }
+                usage(entry, alive: live != nil)
+                Divider()
+                SwiftUI.ScrollView {
+                    if let details = model.details {
+                        info(entry, details).frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding(.top, 20)
+                    }
+                }
+                actions(entry, alive: live != nil)
+            }
+        }
+    }
+
+    private func header(_ entry: ProcessEntry, alive: Bool) -> some View {
+        HStack(spacing: 8) {
+            ProcessIcon(model: model, entry: entry, size: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.name).font(.system(size: 14, weight: .semibold)).lineLimit(2).textSelection(.enabled)
+                HStack(spacing: 6) {
+                    Text(ProcessListView.title(entry.kind)).foregroundStyle(.secondary)
+                    if !alive {
+                        Text(L("Exited")).foregroundStyle(.secondary)
+                    } else if entry.isUnresponsive {
+                        Text(L("Not Responding")).foregroundStyle(.red)
+                    }
+                }
+                .font(.system(size: 11))
+            }
+        }
+    }
+
+    private func usage(_ entry: ProcessEntry, alive: Bool) -> some View {
+        HStack(spacing: 0) {
+            stat(L("Memory"), alive ? entry.memory.map(MonitorFormat.bytes) : nil)
+            stat(L("Disk"), alive ? entry.diskRate.map(MonitorFormat.rate) : nil)
+            stat("CPU", alive ? String(format: "%.1f%%", entry.cpu) : nil)
+        }
+    }
+
+    private func stat(_ title: String, _ value: String?) -> some View {
+        VStack(spacing: 1) {
+            Text(value ?? "–").font(.system(size: 13, weight: .medium).monospacedDigit())
+            Text(title).font(.system(size: 10)).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func info(_ entry: ProcessEntry, _ details: ProcessDetails) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            row(L("PID"), "\(entry.pid)")
+            if let parent = details.parent { row(L("Parent process"), "\(parent.name) (\(parent.pid))") }
+            if let owner = details.responsible { row(L("Belongs to"), "\(owner.name) (\(owner.pid))") }
+            if let user = details.user { row(L("User"), user) }
+            if let started = details.started {
+                row(L("Started"), started.formatted(date: .abbreviated, time: .standard))
+            }
+            if let bundle = details.bundle {
+                row(L("App"), [bundle.name, bundle.version].compactMap { $0 }.joined(separator: " "))
+                if let identifier = bundle.identifier { row(L("Bundle ID"), identifier) }
+            }
+            row(L("Location"), details.path ?? L("Not available"), monospaced: true)
+            if let arguments = details.arguments, !arguments.isEmpty {
+                row(L("Command"), arguments.joined(separator: " "), monospaced: true)
+            }
+            if let signature = details.signature {
+                if let authority = signature.authority { row(L("Signed by"), authority) }
+                if let team = signature.team { row(L("Team ID"), team) }
+                if let identifier = signature.identifier, identifier != details.bundle?.identifier { row(L("Identifier"), identifier) }
+            } else {
+                row(L("Signed by"), L("Unsigned or not readable"))
+            }
+        }
+        .font(.system(size: 11))
+    }
+
+    private func row(_ label: String, _ value: String, monospaced: Bool = false) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(label).foregroundStyle(.secondary).frame(width: 92, alignment: .trailing)
+            Text(value)
+                .font(monospaced ? .system(size: 10.5, design: .monospaced) : .system(size: 11))
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func actions(_ entry: ProcessEntry, alive: Bool) -> some View {
+        HStack(spacing: 6) {
+            if let path = model.details?.path {
+                SwiftUI.Button { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: model.details?.bundle?.path ?? path)]) } label: {
+                    Image(systemName: "folder")
+                }
+                .help(L("Show in Finder"))
+                SwiftUI.Button { Self.copy(path) } label: { Image(systemName: "doc.on.doc") }
+                    .help(L("Copy location"))
+            }
+            SwiftUI.Button { Self.copy("\(entry.pid)") } label: { Text("PID") }
+                .help(L("Copy PID"))
+            Spacer(minLength: 0)
+            if alive {
+                if model.stopping.contains(entry.pid) {
+                    ProgressView().controlSize(.small)
+                } else if ProcessTerminator.canTerminate(entry) {
+                    if confirmingStop {
+                        ProcessStopButtons(model: model, entry: entry, onCancel: { confirmingStop = false })
+                    } else {
+                        SwiftUI.Button(L("Stop")) { confirmingStop = true }
+                    }
+                } else {
+                    Label(L("Protected system process"), systemImage: "lock.fill").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .controlSize(.small)
+    }
+
+    private static func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 }

@@ -146,7 +146,24 @@ final class ProcessListTests: XCTestCase {
         let built = ProcessListReader.build(rows: rows, apps: [:], io: [:], starts: [:], names: [10: "Google Chrome Helper (Renderer)"],
                                             unresponsive: [], previous: [:], now: 1, me: 501)
         XCTAssertEqual(built.entries.first?.name, "Google Chrome Helper (Renderer)")
-        XCTAssertEqual(ProcessListReader.executableName(getpid()).map { !$0.isEmpty }, true)
+        XCTAssertEqual(ProcessListReader.executablePath(getpid()).map { !$0.isEmpty }, true)
+    }
+
+    func testDisplayNameKeepsProcessNameUnlessTruncated() {
+        XCTAssertEqual(ProcessListReader.displayName(command: "claude", path: "/Users/me/.local/share/claude/versions/2.1.326"), "claude")
+        XCTAssertEqual(ProcessListReader.displayName(command: "Google Chrome H", path: "/A/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)"),
+                       "Google Chrome Helper (GPU)")
+        XCTAssertEqual(ProcessListReader.displayName(command: "com.apple.WebKi", path: "/S/X.xpc/Contents/MacOS/com.apple.WebKit.WebContent"), "com.apple.WebKit.WebContent")
+        XCTAssertEqual(ProcessListReader.displayName(command: "ShortButUnrelat", path: "/bin/other"), "ShortButUnrelat")
+        XCTAssertEqual(ProcessListReader.displayName(command: "node", path: nil), "node")
+    }
+
+    func testBuildResolvesOwnerAndSearchMatchesIt() {
+        let rows = [PSRow(pid: 30, uid: 501, cpu: 0, rss: 1, command: "claude")]
+        let apps = [pid_t(9): RunningAppInfo(name: "Warp", bundleID: "dev.warp.Warp-Stable", policy: .regular)]
+        let built = ProcessListReader.build(rows: rows, apps: apps, io: [:], starts: [:], owners: [30: 9], unresponsive: [], previous: [:], now: 1, me: 501)
+        XCTAssertEqual(built.entries.first?.owner, "Warp")
+        XCTAssertEqual(ProcessQuery(search: "warp").apply(built.entries).map(\.pid), [30])
     }
 
     func testAdminScriptCompiles() throws {
@@ -155,5 +172,73 @@ final class ProcessListTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: output) }
         let result = Shell.run("/usr/bin/osacompile", ["-o", output.path] + arguments.dropLast(3), timeout: 20)
         XCTAssertEqual(result?.status, 0)
+    }
+
+    func testParseArgumentsKeepsArgvOnly() {
+        let data = procargs(argc: 3, path: "/usr/local/bin/node", argv: ["node", "server.js", "--port=3000"], env: ["SECRET=abc"])
+        XCTAssertEqual(ProcessDetailsReader.parseArguments(data), ["node", "server.js", "--port=3000"])
+        XCTAssertNil(ProcessDetailsReader.parseArguments([1, 0]))
+
+        var empty = withUnsafeBytes(of: Int32(3)) { Array($0) }
+        for part in ["/bin/foo", "", "foo", "--name", "", "SECRET=abc"] { empty += Array(part.utf8) + [0] }
+        XCTAssertNil(ProcessDetailsReader.parseArguments(empty), "path end not padded to the boundary")
+    }
+
+    /// Layouts copied from real `KERN_PROCARGS2` buffers: the string area starts at offset 4 and argv
+    /// begins at the next 8-byte boundary after the executable path.
+    private func procargs(argc: Int32, path: String, argv: [String], env: [String]) -> [UInt8] {
+        var data = withUnsafeBytes(of: argc) { Array($0) } + Array(path.utf8) + [0]
+        while (data.count - 4) % 8 != 0 { data.append(0) }
+        for part in argv + env { data += Array(part.utf8) + [0] }
+        return data
+    }
+
+    func testParseArgumentsWithEmptyArguments() {
+        // Exact bytes of `/bin/sleep` exec'd with argv ["", "30"] and env ["SECRET=abc"].
+        XCTAssertEqual(ProcessDetailsReader.parseArguments(procargs(argc: 2, path: "/bin/sleep", argv: ["", "30"], env: ["SECRET=abc"])), ["", "30"])
+        XCTAssertEqual(ProcessDetailsReader.parseArguments(procargs(argc: 1, path: "/bin/sleep", argv: [""], env: ["SECRET=abc"])), [""])
+        XCTAssertEqual(ProcessDetailsReader.parseArguments(procargs(argc: 3, path: "/bin/foo", argv: ["foo", "--name", ""], env: ["SECRET=abc"])), ["foo", "--name", ""])
+        XCTAssertEqual(ProcessDetailsReader.parseArguments(procargs(argc: 1, path: "/usr/bin/a", argv: ["a"], env: [])), ["a"])
+        XCTAssertNil(ProcessDetailsReader.parseArguments(procargs(argc: 3, path: "/bin/foo", argv: ["foo"], env: [])), "truncated")
+    }
+
+    func testIdentityNeedsStartTime() {
+        XCTAssertTrue(ProcessListModel.same(entry(5, "a", start: 9), entry(5, "b", start: 9)))
+        XCTAssertFalse(ProcessListModel.same(entry(5, "a", start: nil), entry(5, "a", start: nil)))
+        XCTAssertFalse(ProcessListModel.same(entry(5, "a", start: 9), entry(5, "a", start: 10)))
+    }
+
+    func testBundlePathIsOutermostApp() {
+        XCTAssertEqual(ProcessDetailsReader.bundlePath(forExecutable: "/Applications/Google Chrome.app/Contents/Frameworks/X.framework/Helpers/Helper (GPU).app/Contents/MacOS/Helper (GPU)"),
+                       "/Applications/Google Chrome.app")
+        XCTAssertNil(ProcessDetailsReader.bundlePath(forExecutable: "/usr/sbin/syslogd"))
+    }
+
+    /// Switching filters or opening a confirmation used to widen the popover for a moment because
+    /// the hosting view reported SwiftUI's ideal width.
+    func testProcessesTabKeepsItsWidth() {
+        let defaults = UserDefaults.standard
+        let saved = defaults.object(forKey: MonitorDetailViewController.tabKey)
+        defer { saved.map { defaults.set($0, forKey: MonitorDetailViewController.tabKey) } ?? defaults.removeObject(forKey: MonitorDetailViewController.tabKey) }
+        defaults.set(1, forKey: MonitorDetailViewController.tabKey)
+        let model = ProcessListModel()
+        let controller = MonitorDetailViewController(config: MonitorAppearance(), processes: model)
+        _ = controller.view
+        controller.view.layoutSubtreeIfNeeded()
+        let width = controller.view.fittingSize.width
+        let long = String(repeating: "Very Long Process Name ", count: 8)
+        model.publish([entry(10, long, kind: .app, memory: 1, start: 5), entry(11, "b", kind: .system, memory: 2, start: 6, uid: 0)])
+        for filter in ProcessFilter.allCases {
+            model.query.filter = filter
+            controller.view.layoutSubtreeIfNeeded()
+            XCTAssertEqual(controller.view.fittingSize.width, width, "\(filter)")
+        }
+        model.query.filter = .all
+        model.confirming = 10
+        controller.view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(controller.view.fittingSize.width, width)
+        model.open(model.entries[0])
+        controller.view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(controller.view.fittingSize.width, width)
     }
 }
