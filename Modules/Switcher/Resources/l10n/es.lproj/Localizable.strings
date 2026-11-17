@@ -586,3 +586,27 @@
 
 "macOS icons that are switched off. Switch one on to add it to the menu bar; from the list above you can then move it to Hidden like any other icon." = "Íconos de macOS apagados. Activa uno para agregarlo a la barra; desde la lista de arriba puedes moverlo a Ocultos como cualquier otro ícono.";
 "Every macOS icon is in the menu bar." = "Todos los íconos de macOS están en la barra.";
+
+/* Monitor: Processes tab */
+"Summary" = "Resumen";
+"Processes" = "Procesos";
+"Search name or PID" = "Buscar nombre o PID";
+"All" = "Todos";
+"Apps" = "Apps";
+"Background" = "Segundo plano";
+"Name" = "Nombre";
+"Loading…" = "Cargando…";
+"No matching processes" = "Ningún proceso coincide";
+"Not Responding" = "No responde";
+"PID %d · %@" = "PID %d · %@";
+"Stop" = "Terminar";
+"Stop (asks for an administrator password)" = "Terminar (pide contraseña de administrador)";
+"Protected system process" = "Proceso del sistema protegido";
+"Quit" = "Salir";
+"Force Quit" = "Forzar salida";
+"%d processes" = "%d procesos";
+"%d not responding" = "%d sin responder";
+"%@ already exited." = "%@ ya había terminado.";
+"Couldn't stop %@: %@" = "No se pudo terminar %@: %@";
+"This process is protected." = "Este proceso está protegido.";
+"Couldn't ask for administrator rights." = "No se pudieron pedir permisos de administrador.";

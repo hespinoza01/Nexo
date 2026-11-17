@@ -586,3 +586,27 @@
 
 "macOS icons that are switched off. Switch one on to add it to the menu bar; from the list above you can then move it to Hidden like any other icon." = "macOS icons that are switched off. Switch one on to add it to the menu bar; from the list above you can then move it to Hidden like any other icon.";
 "Every macOS icon is in the menu bar." = "Every macOS icon is in the menu bar.";
+
+/* Monitor: Processes tab */
+"Summary" = "Summary";
+"Processes" = "Processes";
+"Search name or PID" = "Search name or PID";
+"All" = "All";
+"Apps" = "Apps";
+"Background" = "Background";
+"Name" = "Name";
+"Loading…" = "Loading…";
+"No matching processes" = "No matching processes";
+"Not Responding" = "Not Responding";
+"PID %d · %@" = "PID %d · %@";
+"Stop" = "Stop";
+"Stop (asks for an administrator password)" = "Stop (asks for an administrator password)";
+"Protected system process" = "Protected system process";
+"Quit" = "Quit";
+"Force Quit" = "Force Quit";
+"%d processes" = "%d processes";
+"%d not responding" = "%d not responding";
+"%@ already exited." = "%@ already exited.";
+"Couldn't stop %@: %@" = "Couldn't stop %@: %@";
+"This process is protected." = "This process is protected.";
+"Couldn't ask for administrator rights." = "Couldn't ask for administrator rights.";

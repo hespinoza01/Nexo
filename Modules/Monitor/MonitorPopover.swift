@@ -1,3 +1,7 @@
+import Cocoa
+import SwiftUI
+
+
 /// Stats-style combined popover: one section per metric with a ring gauge, a label/value table and,
 /// where it helps, a chart (per-core bars, network up/down, short history) and the top processes.
 /// Width, density, colors, visible sections and order come from `MonitorAppearance`.
@@ -25,8 +29,21 @@ final class MonitorDetailViewController: NSViewController {
     private let temperatureTable = InfoTable()
     private let temperatureChart = SparklineView()
 
-    init(config: MonitorAppearance) {
+    static let tabKey = "monitor.popover.tab"
+    private static let processesWidth: CGFloat = 420
+    private static let processesHeight: CGFloat = 460
+    private let processes: ProcessListModel
+    private let tabs = NSSegmentedControl()
+    private var summary: NSStackView?
+    private var processesView: NSView?
+    private var widthConstraint: NSLayoutConstraint?
+    /// Called with true when the Processes tab becomes visible, false when it hides.
+    var onTabChange: ((Bool) -> Void)?
+    var isShowingProcesses: Bool { tabs.selectedSegment == 1 }
+
+    init(config: MonitorAppearance, processes: ProcessListModel) {
         self.config = config
+        self.processes = processes
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -62,7 +79,27 @@ final class MonitorDetailViewController: NSViewController {
         sections[.temperature] = MonitorSection(L("Temperature"), [temperatureTable] + (charts ? [temperatureChart] : []), density: density)
 
         let visible = config.orderedMetrics.filter(config.isSectionVisible).compactMap { sections[$0] }
-        let stack = NSStackView(views: [header] + visible)
+        let summary = NSStackView(views: visible)
+        summary.orientation = .vertical
+        summary.alignment = .leading
+        summary.spacing = density.sectionSpacing
+        for view in visible { view.widthAnchor.constraint(equalTo: summary.widthAnchor).isActive = true }
+        self.summary = summary
+
+        let processesView = NSHostingView(rootView: ProcessListView(model: processes))
+        processesView.heightAnchor.constraint(equalToConstant: Self.processesHeight).isActive = true
+        self.processesView = processesView
+
+        tabs.segmentStyle = .automatic
+        tabs.trackingMode = .selectOne
+        tabs.segmentCount = 2
+        tabs.setLabel(L("Summary"), forSegment: 0)
+        tabs.setLabel(L("Processes"), forSegment: 1)
+        tabs.target = self
+        tabs.action = #selector(tabChanged)
+        tabs.selectedSegment = UserDefaults.standard.integer(forKey: Self.tabKey) == 1 ? 1 : 0
+
+        let stack = NSStackView(views: [header, tabs, summary, processesView])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = density.sectionSpacing
@@ -72,8 +109,28 @@ final class MonitorDetailViewController: NSViewController {
         for view in stack.arrangedSubviews {
             view.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -2 * inset).isActive = true
         }
-        stack.widthAnchor.constraint(equalToConstant: CGFloat(style.width.clamped(260, 420))).isActive = true
+        widthConstraint = stack.widthAnchor.constraint(equalToConstant: summaryWidth)
+        widthConstraint?.isActive = true
         view = stack
+        applyTab()
+    }
+
+    private var summaryWidth: CGFloat { CGFloat(style.width.clamped(260, 420)) }
+
+    @objc private func tabChanged() {
+        UserDefaults.standard.set(tabs.selectedSegment, forKey: Self.tabKey)
+        applyTab()
+        onTabChange?(isShowingProcesses)
+    }
+
+    /// The process list needs room for four columns, so that tab is wider than a narrow summary.
+    private func applyTab() {
+        let showing = isShowingProcesses
+        summary?.isHidden = showing
+        processesView?.isHidden = !showing
+        widthConstraint?.constant = showing ? max(summaryWidth, Self.processesWidth) : summaryWidth
+        view.layoutSubtreeIfNeeded()
+        preferredContentSize = view.fittingSize
     }
 
     func update(_ sample: MonitorSample, history: [Metric: [Double]], networkHistory: [(download: Double, upload: Double)]) {
