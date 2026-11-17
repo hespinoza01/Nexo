@@ -1,9 +1,11 @@
 import Cocoa
 import ServiceManagement
+import SwiftUI
 
-/// Settings window: sidebar with "General" plus one entry per registered module.
+/// Settings window: sidebar with "General", one entry per registered module and "About".
 final class SettingsWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate {
     private static let generalId = "general"
+    static let aboutId = "about"
     private let registry: ModuleRegistry
     private let sidebar = NSTableView()
     private let content = NSView()
@@ -73,6 +75,7 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
 
     private func reloadEntries() {
         entries = [(Self.generalId, L("General"), "gearshape")] + registry.modules.map { ($0.id, $0.title, $0.icon) }
+            + [(Self.aboutId, L("About"), "info.circle")]
         sidebar.reloadData()
     }
 
@@ -87,7 +90,11 @@ final class SettingsWindowController: NSWindowController, NSTableViewDataSource,
         currentId = id
         content.subviews.forEach { $0.removeFromSuperview() }
         let module = registry.module(withId: id)
-        let page = id == Self.generalId ? GeneralPane(registry: registry) : modulePage(id)
+        let page: NSView = switch id {
+        case Self.generalId: GeneralPane(registry: registry)
+        case Self.aboutId: NSHostingView(rootView: AboutPane())
+        default: modulePage(id)
+        }
         page.translatesAutoresizingMaskIntoConstraints = false
         guard module?.settingsFillsHeight != true else {
             // The module's view scrolls itself (the switcher's sections): pin it to every edge.

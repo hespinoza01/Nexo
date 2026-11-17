@@ -586,3 +586,50 @@
 
 "macOS icons that are switched off. Switch one on to add it to the menu bar; from the list above you can then move it to Hidden like any other icon." = "macOS icons that are switched off. Switch one on to add it to the menu bar; from the list above you can then move it to Hidden like any other icon.";
 "Every macOS icon is in the menu bar." = "Every macOS icon is in the menu bar.";
+
+/* Monitor: Processes tab */
+"Summary" = "Summary";
+"Processes" = "Processes";
+"Search name or PID" = "Search name or PID";
+"All" = "All";
+"Apps" = "Apps";
+"Background" = "Background";
+"Name" = "Name";
+"Loading…" = "Loading…";
+"No matching processes" = "No matching processes";
+"Not Responding" = "Not Responding";
+"PID %d · %@" = "PID %d · %@";
+"Stop" = "Stop";
+"Stop (asks for an administrator password)" = "Stop (asks for an administrator password)";
+"Protected system process" = "Protected system process";
+"Quit" = "Quit";
+"Force Quit" = "Force Quit";
+"%d processes" = "%d processes";
+"%d not responding" = "%d not responding";
+"%@ already exited." = "%@ already exited.";
+"Couldn't stop %@: %@" = "Couldn't stop %@: %@";
+"This process is protected." = "This process is protected.";
+"Couldn't ask for administrator rights." = "Couldn't ask for administrator rights.";
+
+/* Monitor: process details */
+"Belongs to" = "Belongs to";
+"Command" = "Command";
+"Copy PID" = "Copy PID";
+"Copy location" = "Copy location";
+"Exited" = "Exited";
+"Identifier" = "Identifier";
+"Location" = "Location";
+"Not available" = "Not available";
+"PID" = "PID";
+"PID %d · %@ — click for details" = "PID %d · %@ — click for details";
+"Parent process" = "Parent process";
+"Show in Finder" = "Show in Finder";
+"Signed by" = "Signed by";
+"Started" = "Started";
+"Team ID" = "Team ID";
+"Unsigned or not readable" = "Unsigned or not readable";
+"About" = "About";
+"About Nexo" = "About Nexo";
+"Version %@ (build %@)" = "Version %@ (build %@)";
+"Your macOS utilities in one menu bar app: window switcher, system monitor, processes and more." = "Your macOS utilities in one menu bar app: window switcher, system monitor, processes and more.";
+"© %@ %@. Open source under GPL-3.0." = "© %@ %@. Open source under GPL-3.0.";

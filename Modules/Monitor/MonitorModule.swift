@@ -27,6 +27,8 @@ final class MonitorModule: NexoModule {
     private let popover = NSPopover()
     private var detail: MonitorDetailViewController?
     private var observation: AnyCancellable?
+    let processList = ProcessListModel()
+    private let processReader = ProcessListReader()
     private lazy var hotKey = GlobalHotKey { [weak self] in self?.togglePopover() }
 
     var interval: TimeInterval {
@@ -49,6 +51,7 @@ final class MonitorModule: NexoModule {
         sampler.start(interval: interval)
         hotKey.register(ShortcutStore.load(Key.shortcut))
         alerter.requestAuthorizationIfNeeded(store.appearance.alerts)
+        processList.onChange = { [weak self] in self?.refreshProcessList() }
     }
 
     func stop() {
@@ -128,7 +131,18 @@ final class MonitorModule: NexoModule {
         live.publish(sample, history: sampler.history)
         guard popover.isShown, let detail else { return }
         detail.update(sample, history: sampler.history, networkHistory: sampler.networkHistory)
+        refreshProcesses(detail)
+    }
+
+    /// Only the visible tab measures processes: the full list on Processes, the top few on Summary.
+    private func refreshProcesses(_ detail: MonitorDetailViewController) {
+        if detail.isShowingProcesses { return refreshProcessList() }
         TopProcessesReader.read(limit: processLimit) { [weak detail] in detail?.update(processes: $0) }
+    }
+
+    private func refreshProcessList() {
+        guard popover.isShown, detail?.isShowingProcesses == true else { return }
+        processReader.read { [weak self] in self?.processList.publish($0) }
     }
 
     /// No `ps` at all when neither section that lists processes is visible.
@@ -149,14 +163,20 @@ final class MonitorModule: NexoModule {
         }
         // Hidden item (no metric enabled): the button has no window to anchor the popover to.
         guard statusItem?.isVisible == true, let button = statusItem?.button, button.window != nil else { return }
-        let controller = MonitorDetailViewController(config: store.appearance)
+        processList.resetTransient()
+        let controller = MonitorDetailViewController(config: store.appearance, processes: processList)
         detail = controller
         _ = controller.view
         controller.update(sampler.latest, history: sampler.history, networkHistory: sampler.networkHistory)
-        TopProcessesReader.read(limit: processLimit) { [weak controller] in controller?.update(processes: $0) }
+        controller.onTabChange = { [weak self, weak controller] _ in
+            guard let self, let controller else { return }
+            self.refreshProcesses(controller)
+        }
         popover.contentViewController = controller
+        controller.popover = popover
         popover.behavior = .transient
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        refreshProcesses(controller)
         NSApp.activate(ignoringOtherApps: true)
     }
 }

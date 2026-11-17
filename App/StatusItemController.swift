@@ -73,6 +73,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     private func addFooter() {
+        menu.addItem(actionItem(L("About Nexo"), #selector(openAboutAction), ""))
         menu.addItem(actionItem(L("Settings…"), #selector(openSettingsAction), ","))
         menu.addItem(.separator())
         menu.addItem(actionItem(L("Quit Nexo"), #selector(quitAction), "q"))
@@ -86,6 +87,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc private func openSettingsAction() {
         openSettings(nil)
+    }
+
+    @objc private func openAboutAction() {
+        openSettings(SettingsWindowController.aboutId)
     }
 
     @objc private func quitAction() {
