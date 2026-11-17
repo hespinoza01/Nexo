@@ -146,12 +146,33 @@ struct ProcessListView: View {
             }
             .padding(5)
             .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .quaternaryLabelColor).opacity(0.5)))
-            Picker("", selection: $model.query.filter) {
-                ForEach(ProcessFilter.allCases, id: \.self) { Text(Self.title($0)).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            filterBar
         }
+    }
+
+    /// Not a segmented Picker: once a segment is picked, AppKit gives every segment the widest
+    /// label's width ("Segundo plano"), 460 pt, and the whole list overflowed the 396 pt panel.
+    private var filterBar: some View {
+        HStack(spacing: 2) {
+            ForEach(ProcessFilter.allCases, id: \.self) { filter in
+                let selected = model.query.filter == filter
+                SwiftUI.Button { model.query.filter = filter } label: {
+                    Text(Self.title(filter))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 3)
+                        .background(RoundedRectangle(cornerRadius: 5).fill(selected ? Color(nsColor: .controlColor) : Color.clear)
+                            .shadow(color: .black.opacity(selected ? 0.15 : 0), radius: 0.5, y: 0.5))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(selected ? .primary : .secondary)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .font(.system(size: 11, weight: .medium))
+        .padding(2)
+        .background(RoundedRectangle(cornerRadius: 7).fill(Color(nsColor: .quaternaryLabelColor).opacity(0.5)))
     }
 
     private var header: some View {

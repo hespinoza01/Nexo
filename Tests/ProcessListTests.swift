@@ -304,4 +304,63 @@ final class ProcessListTests: XCTestCase {
         check(popover, controller, summary, "reopened → summary")
         popover.close()
     }
+
+    /// Switching the type filter must keep every element of the list inside the panel. A segmented
+    /// Picker gave its four segments the widest label's width after a pick (460 pt in Spanish), and the
+    /// centered content was cut on both sides. Measured through the accessibility frames SwiftUI exposes.
+    func testSwitchingFiltersKeepsContentInside() throws {
+        let defaults = UserDefaults.standard
+        let saved = defaults.object(forKey: MonitorDetailViewController.tabKey)
+        defer { saved.map { defaults.set($0, forKey: MonitorDetailViewController.tabKey) } ?? defaults.removeObject(forKey: MonitorDetailViewController.tabKey) }
+        defaults.set(1, forKey: MonitorDetailViewController.tabKey)
+        let window = NSWindow(contentRect: NSRect(x: 300, y: 300, width: 40, height: 40), styleMask: .borderless, backing: .buffered, defer: false)
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        let model = ProcessListModel()
+        var rows = [ProcessEntry]()
+        for index in 1...60 {
+            let kind: ProcessKind = [.app, .background, .system][index % 3]
+            rows.append(entry(pid_t(index + 100), "Process \(index) with a fairly long name", kind: kind, memory: UInt64(index), start: UInt64(index), uid: kind == .system ? 0 : 501))
+        }
+        model.publish(rows)
+        let controller = MonitorDetailViewController(config: MonitorAppearance(), processes: model)
+        let popover = NSPopover()
+        popover.animates = false
+        popover.contentViewController = controller
+        controller.popover = popover
+        popover.show(relativeTo: window.contentView!.bounds, of: window.contentView!, preferredEdge: .minY)
+        defer { popover.close() }
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertTrue(popover.isShown)
+        let host = try XCTUnwrap(hostingView(in: controller.view))
+        for filter in ProcessFilter.allCases + [.all] {
+            model.query.filter = filter
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            XCTAssertEqual(overflowing(in: host), [], "\(filter)")
+        }
+    }
+
+    private func hostingView(in view: NSView) -> NSView? {
+        if String(describing: type(of: view)).contains("NSHostingView") { return view }
+        return view.subviews.lazy.compactMap(hostingView(in:)).first
+    }
+
+    /// Accessibility elements whose frame reaches outside `host`, as "role minX..maxX".
+    private func overflowing(in host: NSView) -> [String] {
+        guard let window = host.window else { return ["no window"] }
+        let bounds = window.convertToScreen(host.convert(host.bounds, to: nil))
+        var found = [String]()
+        func walk(_ element: NSAccessibilityProtocol, depth: Int) {
+            guard depth < 12 else { return }
+            let frame = element.accessibilityFrame()
+            if frame.width > 0, frame.minX < bounds.minX - 1 || frame.maxX > bounds.maxX + 1 {
+                found.append("\(element.accessibilityRole()?.rawValue ?? "?") \(Int(frame.minX - bounds.minX))..\(Int(frame.maxX - bounds.minX))")
+            }
+            for child in element.accessibilityChildren() ?? [] {
+                if let child = child as? NSAccessibilityProtocol { walk(child, depth: depth + 1) }
+            }
+        }
+        walk(host, depth: 0)
+        return found
+    }
 }
