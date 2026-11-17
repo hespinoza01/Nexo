@@ -628,3 +628,8 @@
 "Started" = "Started";
 "Team ID" = "Team ID";
 "Unsigned or not readable" = "Unsigned or not readable";
+"About" = "About";
+"About Nexo" = "About Nexo";
+"Version %@ (build %@)" = "Version %@ (build %@)";
+"Your macOS utilities in one menu bar app: window switcher, system monitor, processes and more." = "Your macOS utilities in one menu bar app: window switcher, system monitor, processes and more.";
+"© %@ %@. Open source under GPL-3.0." = "© %@ %@. Open source under GPL-3.0.";
