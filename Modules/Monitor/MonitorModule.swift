@@ -170,10 +170,10 @@ final class MonitorModule: NexoModule {
         controller.update(sampler.latest, history: sampler.history, networkHistory: sampler.networkHistory)
         controller.onTabChange = { [weak self, weak controller] _ in
             guard let self, let controller else { return }
-            self.popover.contentSize = controller.preferredContentSize
             self.refreshProcesses(controller)
         }
         popover.contentViewController = controller
+        controller.popover = popover
         popover.behavior = .transient
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         refreshProcesses(controller)

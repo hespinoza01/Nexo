@@ -241,4 +241,67 @@ final class ProcessListTests: XCTestCase {
         controller.view.layoutSubtreeIfNeeded()
         XCTAssertEqual(controller.view.fittingSize.width, width)
     }
+
+    /// The user's three reports, on a real popover: the size must depend only on the tab shown,
+    /// never on which tab was shown first, and the process list must fill the popover's width.
+    func testPopoverSizeFollowsTabOnly() {
+        let defaults = UserDefaults.standard
+        let saved = defaults.object(forKey: MonitorDetailViewController.tabKey)
+        defer { saved.map { defaults.set($0, forKey: MonitorDetailViewController.tabKey) } ?? defaults.removeObject(forKey: MonitorDetailViewController.tabKey) }
+        let window = NSWindow(contentRect: NSRect(x: 300, y: 300, width: 40, height: 40), styleMask: .borderless, backing: .buffered, defer: false)
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        let model = ProcessListModel()
+        var rows = [ProcessEntry]()
+        for index in 1...300 {
+            let kind: ProcessKind = index % 3 == 0 ? .app : .background
+            rows.append(entry(pid_t(index), "Process number \(index) with a fairly long name", kind: kind, memory: UInt64(index), start: UInt64(index)))
+        }
+        model.publish(rows)
+
+        func open(processes: Bool) -> (NSPopover, MonitorDetailViewController) {
+            defaults.set(processes ? 1 : 0, forKey: MonitorDetailViewController.tabKey)
+            let controller = MonitorDetailViewController(config: MonitorAppearance(), processes: model)
+            let popover = NSPopover()
+            popover.animates = false
+            popover.contentViewController = controller
+            controller.popover = popover
+            popover.show(relativeTo: window.contentView!.bounds, of: window.contentView!, preferredEdge: .minY)
+            settle()
+            XCTAssertTrue(popover.isShown, "the popover must really be on screen for this test to mean anything")
+            return (popover, controller)
+        }
+        func settle() { RunLoop.current.run(until: Date().addingTimeInterval(0.05)) }
+        func check(_ popover: NSPopover, _ controller: MonitorDetailViewController, _ expected: NSSize, _ label: String) {
+            XCTAssertEqual(popover.contentSize, expected, label)
+            XCTAssertEqual(controller.view.frame.size, expected, label)
+            if controller.isShowingProcesses {
+                let frame = controller.processesFrame
+                XCTAssertLessThanOrEqual(frame.maxX, expected.width, label)
+                XCTAssertGreaterThan(frame.width, expected.width - 40, label)
+            }
+        }
+
+        var (popover, controller) = open(processes: false)
+        let summary = popover.contentSize
+        controller.selectTab(processes: true); settle()
+        let processes = popover.contentSize
+        XCTAssertGreaterThan(processes.width, summary.width)
+        check(popover, controller, processes, "summary → processes")
+        controller.selectTab(processes: false); settle()
+        check(popover, controller, summary, "processes → summary")
+        controller.selectTab(processes: true); settle()
+        check(popover, controller, processes, "summary → processes again")
+        model.open(model.entries[0]); settle()
+        check(popover, controller, processes, "detail")
+        model.closeDetails(); settle()
+        check(popover, controller, processes, "back from detail")
+        popover.close()
+
+        (popover, controller) = open(processes: true)
+        check(popover, controller, processes, "reopened on processes")
+        controller.selectTab(processes: false); settle()
+        check(popover, controller, summary, "reopened → summary")
+        popover.close()
+    }
 }

@@ -37,6 +37,17 @@ final class MonitorDetailViewController: NSViewController {
     private var summary: NSStackView?
     private var processesView: NSView?
     private var widthConstraint: NSLayoutConstraint?
+    private var stack: NSStackView?
+    /// Popover showing this controller; its size is set directly. `preferredContentSize` stays unset
+    /// on purpose: measured on macOS 27.2, NSPopover reacts to each change of it by resizing from a
+    /// stale base (it kept the first tab's size, and 420×537 → 421×538 produced 301×758).
+    weak var popover: NSPopover? {
+        didSet {
+            loadViewIfNeeded()
+            popover?.contentSize = fittedSize
+        }
+    }
+    private(set) var fittedSize = NSSize.zero
     /// Called with true when the Processes tab becomes visible, false when it hides.
     var onTabChange: ((Bool) -> Void)?
     var isShowingProcesses: Bool { tabs.selectedSegment == 1 }
@@ -108,16 +119,35 @@ final class MonitorDetailViewController: NSViewController {
         let inset = density.padding + 2
         stack.edgeInsets = NSEdgeInsets(top: inset, left: inset, bottom: inset, right: inset)
         stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.detachesHiddenViews = true
         for view in stack.arrangedSubviews {
             view.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -2 * inset).isActive = true
         }
         widthConstraint = stack.widthAnchor.constraint(equalToConstant: summaryWidth)
         widthConstraint?.isActive = true
-        view = stack
+        // The stack hangs from the top of a frame-based container sized by `fitToContent()`, so the
+        // popover's own sizing never fights the stack's constraints: that fight kept whichever tab's
+        // size came first and clipped the other tab's content.
+        let container = NSView()
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: container.topAnchor),
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+        ])
+        self.stack = stack
+        view = container
         applyTab()
     }
 
     private var summaryWidth: CGFloat { CGFloat(style.width.clamped(260, 420)) }
+
+    func selectTab(processes: Bool) {
+        tabs.selectedSegment = processes ? 1 : 0
+        tabChanged()
+    }
+
+    /// Frame of the process list inside the popover, for layout checks.
+    var processesFrame: NSRect { processesView?.frame ?? .zero }
 
     @objc private func tabChanged() {
         UserDefaults.standard.set(tabs.selectedSegment, forKey: Self.tabKey)
@@ -131,8 +161,19 @@ final class MonitorDetailViewController: NSViewController {
         summary?.isHidden = showing
         processesView?.isHidden = !showing
         widthConstraint?.constant = showing ? max(summaryWidth, Self.processesWidth) : summaryWidth
-        view.layoutSubtreeIfNeeded()
-        preferredContentSize = view.fittingSize
+        fitToContent()
+    }
+
+    /// Sections appear and disappear with the data (GPU, process rows), so the summary refits after
+    /// each update; an unchanged size is not re-sent to the popover.
+    func fitToContent() {
+        guard let stack else { return }
+        stack.layoutSubtreeIfNeeded()
+        let size = stack.fittingSize
+        guard size != fittedSize || (popover != nil && popover?.contentSize != size) else { return }
+        fittedSize = size
+        view.setFrameSize(size)
+        popover?.contentSize = size
     }
 
     func update(_ sample: MonitorSample, history: [Metric: [Double]], networkHistory: [(download: Double, upload: Double)]) {
@@ -143,6 +184,7 @@ final class MonitorDetailViewController: NSViewController {
         updateDisk(sample)
         updateBattery(sample)
         updateTemperature(sample, history: history[.temperature] ?? [])
+        if !isShowingProcesses { fitToContent() }
     }
 
     func update(processes: TopProcesses) {
@@ -150,6 +192,7 @@ final class MonitorDetailViewController: NSViewController {
         cpuProcesses.rows = processes.byCPU.map { .init($0.name, String(format: "%.1f%%", $0.cpu)) }
         memoryProcesses.isHidden = processes.byMemory.isEmpty
         memoryProcesses.rows = processes.byMemory.map { .init($0.name, MonitorFormat.bytes($0.memory)) }
+        if !isShowingProcesses { fitToContent() }
     }
 
     private func updateCPU(_ sample: MonitorSample) {
